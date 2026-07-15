@@ -1,5 +1,4 @@
 # PeekMatch
-FF
 AI-powered CV ↔ job vacancy compatibility analysis platform (Azerbaijani-market product, implemented from the Claude Design handoff in `project/` — see `chats/` for the original design conversation).
 
 This repo contains a working implementation of the **core user flow**: landing → CV/vacancy analysis → free results dashboard → pricing → checkout → payment → paid report / tailored CV / cover letter / interview prep. Admin panel, legal pages, delete/expired states, and EN/TR/RU UI chrome from the original design were intentionally left out of this pass — see `chats/chat1.md` and the design file for the full scope if you want to extend it.
