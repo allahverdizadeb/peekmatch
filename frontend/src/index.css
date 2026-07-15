@@ -1,0 +1,139 @@
+@import "tailwindcss";
+
+@theme {
+  /* colors — ported 1:1 from the PeekMatch design system */
+  --color-navy: #102a43;
+  --color-teal: #0f9d91;
+  --color-teal-h: #087f76;
+  --color-blue: #3478f6;
+
+  --color-bg: #f6f8fb;
+  --color-bg2: #eef3f7;
+  --color-surface: #ffffff;
+
+  --color-text: #102a43;
+  --color-text2: #52667a;
+  --color-muted: #74879a;
+  --color-border: #dde5ec;
+
+  --color-success: #198754;
+  --color-success-bg: #eaf7f0;
+  --color-warning: #c97800;
+  --color-warning-bg: #fff5e3;
+  --color-danger: #cf3f4f;
+  --color-danger-bg: #fdecef;
+  --color-info: #3478f6;
+  --color-info-bg: #eaf1ff;
+  --color-premium: #7057d9;
+  --color-premium-bg: #f0edfb;
+
+  /* radii */
+  --radius-rc: 14px;
+  --radius-rl: 18px;
+  --radius-rk: 10px;
+
+  /* shadows */
+  --shadow-sh-sm: 0 1px 2px rgba(16, 42, 67, 0.06);
+  --shadow-sh: 0 4px 16px rgba(16, 42, 67, 0.07);
+  --shadow-sh-lg: 0 14px 44px rgba(16, 42, 67, 0.12);
+
+  /* typography */
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+
+  --breakpoint-xs: 400px;
+}
+
+@layer base {
+  html,
+  body {
+    margin: 0;
+    padding: 0;
+  }
+  body {
+    font-family: var(--font-sans);
+    background: var(--color-bg);
+    color: var(--color-text);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    font-feature-settings: "cv11", "ss01";
+    line-height: 1.5;
+  }
+  * {
+    box-sizing: border-box;
+  }
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #c7d2dc;
+    border-radius: 8px;
+    border: 2px solid var(--color-bg);
+  }
+}
+
+@layer utilities {
+  .focus-ring:focus-visible {
+    outline: 3px solid rgba(15, 157, 145, 0.4);
+    outline-offset: 2px;
+  }
+  .lift {
+    transition:
+      transform 0.16s ease,
+      box-shadow 0.16s ease;
+  }
+  .lift:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-sh-lg);
+  }
+}
+
+@keyframes pm-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes pm-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+@keyframes pm-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes pm-growx {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+@keyframes pm-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}

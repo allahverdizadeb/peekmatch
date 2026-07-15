@@ -1,0 +1,68 @@
+// PeekMatch — CV/vacancy matching platform
+// Prisma schema: analyses (CV + vacancy + AI result) and orders (one-time package purchases)
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Analysis {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  // CV input
+  cvMode     String? // 'file' | 'text'
+  cvFileName String?
+  cvMimeType String?
+  cvSizeBytes Int?
+  cvText     String? // extracted / pasted CV text
+
+  // Vacancy input
+  vacancySource   String? // 'url' | 'manual'
+  vacancyUrl      String?
+  vacancyStatus   String  @default("idle") // idle | loading | success | failed
+  vacancyFailReason String?
+  vacancyTitle    String?
+  vacancyCompany  String?
+  vacancyLocation String?
+  vacancyDomain   String?
+  vacancyText     String? // extracted or manually pasted requirements text
+
+  outputLanguage String  @default("az") // az | en | ru
+  consent        Boolean @default(false)
+
+  // Processing
+  status      String @default("draft") // draft | processing | done | failed
+  procStage   Int    @default(0) // 0..6
+  failReason  String?
+
+  // AI result (free + paid derived content), stored as JSON
+  resultJson         String? // matching analysis result
+  reportJson          String? // paid: full requirement matrix + weak presentation + improvement opportunities
+  tailoredCvJson      String? // paid tier 2+: tailored CV content
+  coverLetterJson     String? // paid tier 2+: cover letter content
+  interviewPrepJson   String? // paid tier 3: interview prep content
+
+  orders Order[]
+
+  @@index([expiresAt])
+}
+
+model Order {
+  id         String   @id @default(uuid())
+  createdAt  DateTime @default(now())
+  paidAt     DateTime?
+  analysisId String
+  analysis   Analysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+
+  package   Int // 1 = report, 2 = tailored CV + cover letter, 3 = interview package
+  amountUsd Float
+  status    String @default("pending") // pending | processing | paid | failed
+
+  @@index([analysisId])
+}
