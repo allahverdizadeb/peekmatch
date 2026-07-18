@@ -33,7 +33,7 @@ model Analysis {
   vacancyDomain   String?
   vacancyText     String? // extracted or manually pasted requirements text
 
-  outputLanguage String  @default("az") // az | en | ru
+  outputLanguage String  @default("az") // az | en
   consent        Boolean @default(false)
 
   // Processing
@@ -47,6 +47,10 @@ model Analysis {
   tailoredCvJson      String? // paid tier 2+: tailored CV content
   coverLetterJson     String? // paid tier 2+: cover letter content
   interviewPrepJson   String? // paid tier 3: interview prep content
+
+  // Lifecycle
+  deletedAt                DateTime? // set by user-triggered delete; content fields nulled at the same time
+  selfAttestedGapConfirmed Boolean?  // user's yes/no answer to "do you actually have this experience?" for mostImportantMissingRequirement
 
   orders Order[]
 
@@ -65,4 +69,12 @@ model Order {
   status    String @default("pending") // pending | processing | paid | failed
 
   @@index([analysisId])
+}
+
+model Suggestion {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  category  String // Funksionallıq | Dizayn | Qiymət | Digər
+  text      String
+  email     String
 }

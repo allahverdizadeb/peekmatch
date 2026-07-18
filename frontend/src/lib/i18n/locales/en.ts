@@ -25,14 +25,13 @@ export const en: Dict = {
     privacy: 'Privacy',
     terms: 'Terms of use',
     dataDelete: 'Data deletion',
+    sampleResult: 'Sample result',
     copyright: '© 2026 PeekMatch. All rights reserved.',
   },
 
   languageSwitcher: {
     az: 'Azərbaycan dili',
     en: 'English',
-    tr: 'Türkçe',
-    ru: 'Русский',
   },
 
   landing: {
@@ -42,24 +41,46 @@ export const en: Dict = {
       'Upload your CV, add the job posting link, and see how well your real experience matches the key requirements.',
     ctaPrimary: 'Analyze for free',
     ctaSecondary: 'See a sample result',
+    heroTrustLine: 'See in just 30 seconds how well your CV passes ATS systems, and boost your interview chances.',
     trust1: 'No sign-up required',
     trust2: 'No fabricated experience added',
     trust3: 'Data is deleted automatically',
-    cvCardLabel: 'CV',
-    vacancyCardLabel: 'Job requirements',
+    cvCardName: 'CV.pdf',
+    cvCardTag1: 'Reporting',
+    cvCardTag2: 'SQL',
+    vacancyCardLabel: 'Vacancy',
+    heroVacancyTitle: 'Business Analyst',
+    heroVacancyCompany: 'Caspian Systems',
     vacancyItem1: 'Operational reporting',
-    vacancyItem2: 'Stakeholder coordination',
-    vacancyItem3: 'Power BI',
+    vacancyItem2: 'Stakeholder coord.',
+    vacancyItem3: 'Agile / Scrum',
+    vacancyItem4: 'Power BI',
+    heroCriticalGap: '1 critical gap',
     gaugeLabel: 'Good match',
 
     howItWorksLabel: 'How it works',
-    howItWorksTitle: 'From CV to result — 3 steps',
+    howItWorksTitle: 'From CV to result — 4 steps',
     step1Title: 'Upload your CV',
     step1Text: 'Add your CV in PDF or DOCX format.',
     step2Title: 'Add the job posting',
     step2Text: 'Paste the job listing link or enter the text.',
-    step3Title: 'See your result',
-    step3Text: 'See your match score, strengths, and critical gaps.',
+    step3Title: 'AI searches for evidence',
+    step3Text: "For every requirement, we check your CV for real evidence — not keyword counts, but your actual experience.",
+    step4Title: 'See your result and take action',
+    step4Text: 'Match score, critical gaps, and a concrete recommendation — plus a tailored CV and interview prep if you want them.',
+
+    howVisualTag1: 'Document',
+    howVisualTag2: 'Vacancy',
+    howVisualTag4: 'Result',
+    howVisualFileName: 'CV_Aynur.pdf',
+    howVisualFileHint: 'PDF · DOCX · max 10 MB',
+    howVisualUrl: 'hh.example.az/business-analyst',
+    howVisualVacancyFound: 'Vacancy found',
+    howVisualVacancyTitle: 'Business Analyst',
+    howVisualReqIdentified: 'Key requirements identified',
+    howVisualEvidenceFound: 'Evidence found in CV',
+    howVisualCalculating: 'Calculating match...',
+    howVisualCriticalGap: '1 critical gap',
 
     diffTitle: "We don't just stuff your CV with keywords.",
     diffSubtitle: "We show how the candidate's real experience aligns with the job's requirements.",
@@ -80,25 +101,23 @@ export const en: Dict = {
 
     exampleBadge: 'Sample analysis',
     exampleTitle: "Here's what the result looks like",
-    exampleMeta: 'Business Analyst · Caspian Systems (sample) · Baku, Azerbaijan',
-    exampleMainReq: 'Key requirements',
-    exampleStrengthLabel: 'Strength:',
-    exampleStrengthText: 'Your operational reporting experience matches the reporting requirement in the job posting.',
-    exampleGapLabel: 'Critical gap:',
-    exampleGapText: 'No hands-on experience with Power BI is shown.',
-    exampleRecommendationLabel: 'Recommendation:',
-    exampleRecommendationText: 'Apply after tailoring your CV.',
+    exampleJobTitle: 'Business Analyst · Caspian Systems',
+    exampleLocation: 'Baku, Azerbaijan · Hybrid',
+    exampleReliabilityBadge: 'Reliability: High',
+    exampleGaugeUnit: 'Match',
+    exampleStrengthTitle: 'Strength: Operational reporting',
+    exampleStrengthSubtitle: 'Evidence found in CV',
+    exampleGapTitle: 'Critical gap: Power BI',
+    exampleGapSubtitle: 'No hands-on experience shown',
+    exampleRecommendationTitle: 'Recommendation',
+    exampleRecommendationSubtitle: 'Apply after tailoring your CV',
+    exampleCta: 'View the full sample',
 
     pricingLabel: 'Pricing',
     pricingTitle: 'Choose after you see the result',
     pricingSubtitle: 'The initial analysis is always free. All packages are one-time payments — no subscription.',
     comparePackages: 'Compare packages →',
-    packages: {
-      '1': { name: 'Full match report', desc: 'See every match between your CV and the job posting in detail.' },
-      '2': { name: 'Job-tailored CV and cover letter', desc: 'Tailored CV, cover letter, Word and PDF files.' },
-      '3': { name: 'Full application and interview package', desc: 'Interview questions, answer frameworks, and prep materials.' },
-    },
-    packageCta: 'Start your free analysis',
+    selectCta: 'Choose',
 
     privacyTitle: 'Your CV data belongs to you',
     privacySubtitle: 'Your files are used only for analysis and are never shared publicly.',
@@ -106,6 +125,32 @@ export const en: Dict = {
     privacyPoint2: 'No public CV links are created',
     privacyPoint3: 'You can delete all your data at any time',
     privacyPoint4: 'Files are automatically deleted after the retention period',
+    privacyCta: 'Learn more about privacy',
+
+    faqLabel: 'FAQ',
+    faqTitle: 'Frequently asked questions',
+    faq: [
+      {
+        q: 'How does PeekMatch work?',
+        a: "Upload your CV and add the job posting link. The system compares your CV against the job's key requirements and shows you the result.",
+      },
+      {
+        q: "What's the difference between the free and paid packages?",
+        a: 'The free analysis shows your basic match and gaps. Paid packages provide a detailed report, a tailored CV, a cover letter, and interview preparation.',
+      },
+      {
+        q: 'Are the percentages shown accurate?',
+        a: 'The percentages are only an approximate AI assessment based on your CV and the job posting. They are not a guarantee of an interview or a job offer.',
+      },
+      {
+        q: "Does the platform add experience that I don't have?",
+        a: "No. The system only uses information that's already in your CV or that you've confirmed yourself.",
+      },
+      {
+        q: 'How is my data protected?',
+        a: 'Your CV and results are kept confidential and deleted within 24 hours at most. You can also delete your data yourself at any time.',
+      },
+    ],
   },
 
   analysisForm: {
@@ -142,7 +187,7 @@ export const en: Dict = {
     manualSubmittedText: 'Job posting entered as text',
 
     step3Label: '3. Choose the result language',
-    languagePills: { az: 'Azerbaijani', en: 'English', tr: 'Turkish', ru: 'Russian' },
+    languagePills: { az: 'Azerbaijani', en: 'English' },
 
     consentText:
       'I consent to my CV data being processed for analysis and automatically deleted after the specified retention period.',
@@ -175,6 +220,14 @@ export const en: Dict = {
     failedTitle: 'Analysis did not complete',
     failedSubtitle: 'Your files have been saved. You can restart the analysis.',
     retry: 'Try again',
+    longWaitHints: [
+      'Prioritizing requirements...',
+      'Scoring your skills against the role...',
+      'Identifying your strengths...',
+      'Analyzing gaps...',
+      'Calculating the match score...',
+      'Putting the result together...',
+    ],
   },
 
   results: {
@@ -192,6 +245,8 @@ export const en: Dict = {
 
     kpiCompatTitle: 'Candidate match',
     kpiCompatText: 'Your CV meets a significant share of the job’s key requirements.',
+    realMatchTeaser: "Your real match may be higher than what's shown.",
+    realMatchTeaserCta: 'See it in the full report',
     kpiReqTitle: 'Key requirements met',
     reqFullyMet: 'fully met',
     reqPartial: 'partial',
@@ -214,12 +269,21 @@ export const en: Dict = {
     criticalGapBadge: 'Critical gap',
     mostImportantNote: "If you have this skill, add it to your CV. If you don't, don't claim experience you don't have.",
 
+    selfAttestQuestionPrefix: 'Do you have real experience with',
+    selfAttestQuestionSuffix: "that just isn't shown in your CV?",
+    selfAttestYes: 'Yes, I do',
+    selfAttestNo: "No, I don't",
+    selfAttestConfirmedYes: 'Noted — this experience will be shown with evidence in your tailored CV.',
+    selfAttestConfirmedNo: "Noted — this skill won't be added to your CV; we'll provide an honest explanation angle for interview prep.",
+
     tailorCvCta: 'Tailor my CV for this job',
     openReportCta: 'Unlock the full report — $0.49',
 
     lockedTitle: 'See the evidence and gaps for every requirement',
     lockedPackageName: 'Full match report',
     lockedPackageDesc: 'Analysis of all key requirements, evidence found in your CV, critical gaps, and detailed statistics.',
+
+    deleteMyDataCta: 'Delete my data',
   },
 
   pricing: {
@@ -231,6 +295,26 @@ export const en: Dict = {
     premiumBadge: 'Premium',
     ownedBadge: 'Owned ✓',
     footerNote: 'One-time payment — no subscription.',
+    freeTier: {
+      name: 'Free initial analysis',
+      desc: 'An instant initial result, no sign-up required.',
+      priceLabel: 'Free',
+      features: ['Match score', 'Summary of key requirements', 'Critical gaps', 'HR interview likelihood', 'Application recommendation'],
+      cta: 'Start for free',
+    },
+    comparisonTitle: 'Compare packages',
+    comparisonFeatureLabel: 'Feature',
+    comparisonRows: [
+      'Match report & statistics',
+      'Evidence from your CV',
+      'PDF report',
+      'Tailored CV',
+      'Cover letter',
+      'Word & PDF files',
+      'Interview questions',
+      '"Tell me about yourself"',
+      'Interview prep PDF',
+    ],
     packages: {
       '1': {
         name: 'Full match report',
@@ -280,8 +364,15 @@ export const en: Dict = {
     secureRedirect: "You'll be redirected to a secure payment page to complete your purchase.",
     noCardStorage: 'PeekMatch never sees or stores your card details.',
     errGeneric: 'An error occurred while creating the order.',
+    notFound: 'This analysis could not be found.',
     proceedCta: 'Proceed to payment',
     backToPackages: 'Back to packages',
+    upgrade: {
+      newPackageLabel: 'New package',
+      previouslyPaidLabel: 'Previously paid',
+      amountDueLabel: 'Amount due',
+      note: 'You only pay the price difference.',
+    },
     packages: {
       '1': { name: 'Full match report', features: ['Full requirement analysis', 'Evidence from your CV', 'PDF report'] },
       '2': {
@@ -338,6 +429,13 @@ export const en: Dict = {
     statHrChance: 'HR chance',
     categoryTitle: 'Match by category',
 
+    realVsVisibleTitle: 'Real match vs. what your CV shows',
+    realLabel: 'Your real match',
+    visibleLabel: 'Match visible in your CV',
+    weightTitle: 'Requirement weights',
+    weightSubtitle: 'Not every requirement carries the same weight — your match score is calculated using weights.',
+    weightMultipliers: { kritik: '×5', əsas: '×3', üstünlük: '×1' },
+
     reqMatrixTitle: 'Requirement matrix',
     filterAll: 'All',
     filterMet: 'Met',
@@ -371,7 +469,12 @@ export const en: Dict = {
     pdfReportLabel: 'PDF report',
     downloadCta: 'Download',
 
-    cvLoadingText: 'Loading (preparing CV)...',
+    cvGeneratingHints: [
+      'Prioritizing skills to match the role...',
+      'Strengthening the experience section...',
+      'Aligning keywords...',
+      'Formatting the CV...',
+    ],
     summaryTitle: 'Professional summary',
     skillsTitle: 'Core skills',
     experienceTitle: 'Work experience',
@@ -382,7 +485,12 @@ export const en: Dict = {
     downloadWordCv: 'Download CV as Word',
     downloadPdfCv: 'Download CV as PDF',
 
-    coverLetterLoadingText: 'Loading (preparing cover letter)...',
+    coverLetterGeneratingHints: [
+      'Building arguments tailored to the role...',
+      'Choosing a tone that fits the company...',
+      'Highlighting your key achievements...',
+      'Finishing the cover letter...',
+    ],
     coverLetterTitle: 'Job-tailored cover letter',
     basedOnTitle: 'What is this letter based on?',
     downloadWordLetter: 'Download as Word',
@@ -390,7 +498,12 @@ export const en: Dict = {
     copiedText: 'Copied',
     copyShort: 'Copy',
 
-    interviewLoadingText: 'Loading (preparing interview prep)...',
+    interviewGeneratingHints: [
+      'Preparing HR questions...',
+      'Drafting situational questions...',
+      'Selecting technical questions...',
+      'Preparing answer strategies...',
+    ],
     strongestTopic: 'Strongest topic',
     biggestRisk: 'Biggest risk',
     tellMeAboutYourselfTitle: '"Tell me about yourself"',
@@ -402,5 +515,57 @@ export const en: Dict = {
     answerFramework: 'Answer framework',
     gapExplanationsTitle: 'Explanation of critical gaps',
     questionsToAskTitle: 'Questions to ask the interviewer',
+  },
+
+  lifecycle: {
+    expiredTitle: 'This analysis has expired',
+    expiredBody: 'Your CV and results have been automatically deleted for privacy.',
+    deletedTitle: 'Your data has been deleted',
+    deletedBody: 'Your CV and analysis results are no longer accessible.',
+    newAnalysisCta: 'Start a new analysis',
+    deleteConfirmTitle: 'Delete all your data?',
+    deleteConfirmBody: 'Your CV, job posting text, analysis results, and generated documents will be deleted. This action cannot be undone.',
+    deleteConfirmCta: 'Delete my data',
+    cancelCta: 'Cancel',
+  },
+
+  feedback: {
+    button: 'Give feedback',
+    title: 'Share your feedback',
+    subtitle: 'How can we improve PeekMatch? Every suggestion is read by the team.',
+    placeholder: 'Write your feedback here...',
+    emailPlaceholder: 'Your email address',
+    emailNote: 'Only used to contact you if needed.',
+    send: 'Send',
+    thanks: 'Your feedback has been sent. Thank you!',
+    categories: {
+      Funksionallıq: 'Functionality',
+      Dizayn: 'Design',
+      Qiymət: 'Pricing',
+      Digər: 'Other',
+    },
+  },
+
+  admin: {
+    gateTitle: 'Admin login',
+    gatePlaceholder: 'Admin key',
+    gateSubmit: 'Log in',
+    gateError: 'Incorrect key.',
+    title: 'Admin — User feedback',
+    viewInsights: 'View insights',
+    classifyCta: 'Structure with AI',
+    totalLabel: 'Total feedback',
+    teamOnlyNote: 'This panel is for the team only',
+    empty: 'No feedback yet.',
+    priorityLabel: 'Priority',
+    insightsTitle: 'Admin — Insights',
+    kpiTotal: 'Total feedback',
+    kpiHighPriority: 'High priority',
+    kpiFeatureRequests: 'Feature requests',
+    kpiNegative: 'Negative feedback',
+    byTheme: 'By theme',
+    bySentiment: 'By sentiment',
+    byPriority: 'By priority',
+    byCategory: 'By category',
   },
 };

@@ -4,5 +4,14 @@ dist
 .env
 
 /src/generated/prisma
-/prisma/dev.db
-/prisma/dev.db-journal
+
+# The actual SQLite file lives at backend/dev.db (see db.ts's DATABASE_URL default), NOT under
+# prisma/ — this used to say /prisma/dev.db, which matched nothing and let the real dev.db (with
+# real CV/vacancy/analysis content from testing) get committed. If you're reading this after that
+# happened again, `git rm --cached dev.db` and rotate/purge any exposed content from git history.
+/dev.db
+/dev.db-journal
+/test.db
+/test.db-journal
+/test-results
+/playwright-report

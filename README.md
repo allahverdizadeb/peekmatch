@@ -1,9 +1,9 @@
 # PeekMatch
 AI-powered CV ↔ job vacancy compatibility analysis platform (Azerbaijani-market product, implemented from the Claude Design handoff in `project/` — see `chats/` for the original design conversation).
 
-This repo contains a working implementation of the **core user flow**: landing → CV/vacancy analysis → free results dashboard → pricing → checkout → payment → paid report / tailored CV / cover letter / interview prep. Admin panel, legal pages, and delete/expired states from the original design were intentionally left out of this pass — see `chats/chat1.md` and the design file for the full scope if you want to extend it.
+This repo contains a working implementation of the **full user flow**: landing → CV/vacancy analysis → free results dashboard (incl. real-vs-CV-visible match teaser and a self-attestation prompt for the top missing requirement) → pricing (incl. free tier + comparison table) → checkout (incl. upgrade-diff pricing) → payment → paid report / tailored CV / cover letter / interview prep → delete/expired lifecycle states, plus legal pages (privacy/terms/data-deletion) and a shared-secret-gated admin panel for reviewing user feedback.
 
-The UI is fully localized into Azerbaijani, English, Turkish, and Russian via a header language switcher (`frontend/src/lib/i18n/`); the CV-analysis AI result language defaults to whatever site language is active but can be changed independently.
+The UI is fully localized into Azerbaijani and English via a header language switcher (`frontend/src/lib/i18n/`); the CV-analysis AI result language defaults to whatever site language is active but can be changed independently.
 
 ## Stack
 
@@ -32,6 +32,8 @@ npm run dev                 # http://localhost:5173 (proxies /api to :4000)
 | `DATABASE_URL` | yes (defaults to `file:./dev.db`) | SQLite database path |
 | `ANTHROPIC_API_KEY` | **for real AI analysis** | Powers the CV↔vacancy matching, tailored CV, cover letter, and interview prep generation via Claude (`claude-opus-4-8`). Without it, the backend logs a warning and falls back to a clearly-labeled offline placeholder analyzer so the rest of the product flow is still exercisable. |
 | `PORT` | no (defaults to 4000) | Backend port |
+| `ADMIN_KEY` | **for the admin panel** | Shared secret gating `GET /api/suggestions` and the `/admin`/`/admin/insights` frontend pages — not a real auth system, just a header/query-param check (`x-admin-key`). Without it set, admin endpoints always 401. |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | no | Feedback-widget submissions (`POST /api/suggestions`) are always saved to the database; if `SMTP_HOST` is set, a copy is also emailed to `support@peeky.az` via `nodemailer`. Without it, the backend logs a warning and skips sending — submissions are never lost. |
 
 Payments are real in structure (orders, gating, unlock logic) but the charge step itself is simulated — no live payment provider is wired up. Vacancy URL extraction attempts a real server-side fetch and falls back to the manual-paste flow when a site blocks it or the page is too thin.
 

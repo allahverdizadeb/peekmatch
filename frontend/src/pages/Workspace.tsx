@@ -4,6 +4,11 @@ import { Lock, Download, Copy, Check, FileText, ChevronDown, Clock } from 'lucid
 import { AppHeader } from '../components/AppHeader';
 import { Button, Badge, Card } from '../components/ui';
 import { CategoryBarChart } from '../components/charts';
+import { LifecycleState } from '../components/LifecycleState';
+import { GeneratingIllustration } from '../components/GeneratingIllustration';
+import { InterviewIllustration } from '../components/InterviewIllustration';
+import { RotatingHint } from '../components/RotatingHint';
+import { localizeCategoryName } from '../lib/categoryLabel';
 import {
   getAnalysis,
   getReport,
@@ -42,14 +47,22 @@ export default function Workspace() {
   const navigate = useNavigate();
   const { t } = useLanguage();
   const [info, setInfo] = useState<AnalysisInfo | null>(null);
+  const [lifecycleCode, setLifecycleCode] = useState<'expired' | 'deleted' | null>(null);
 
   useEffect(() => {
-    if (id) getAnalysis(id).then(setInfo).catch(() => {});
+    if (!id) return;
+    getAnalysis(id)
+      .then(setInfo)
+      .catch((err) => {
+        if (err.status === 410 && (err.code === 'expired' || err.code === 'deleted')) setLifecycleCode(err.code);
+      });
   }, [id]);
 
   const activeTab = (tab as Tab) || 'report';
   const owned = info?.ownedPackage ?? 0;
   const TABS = buildTabs(t);
+
+  if (lifecycleCode) return <LifecycleState code={lifecycleCode} />;
 
   if (!id || !info) {
     return (
@@ -111,7 +124,7 @@ function LockPanel({ pkgName, price, analysisId, pkgId }: { pkgName: string; pri
 }
 
 function ReportTab({ id }: { id: string }) {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const [report, setReport] = useState<FullReport | null>(null);
   const [filter, setFilter] = useState<'all' | 'met' | 'partial' | 'missing'>('all');
 
@@ -157,6 +170,42 @@ function ReportTab({ id }: { id: string }) {
         </Card>
       </div>
 
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Card className="p-5">
+          <h2 className="text-[14.5px] font-bold mb-3.5">{t.workspace.realVsVisibleTitle}</h2>
+          {[
+            [t.workspace.realLabel, report.realCompatibility, '#0F9D91'],
+            [t.workspace.visibleLabel, report.compatibility, '#C97800'],
+          ].map(([label, value, color], i) => (
+            <div key={i} className={i === 0 ? 'mb-3.5' : ''}>
+              <div className="flex justify-between text-[13px] mb-1.5">
+                <span className="font-semibold">{label}</span>
+                <span className="font-extrabold text-[15px]" style={{ color: color as string }}>{value}%</span>
+              </div>
+              <div className="h-2.5 rounded-full bg-bg2 overflow-hidden">
+                <div className="h-full rounded-full transition-[width] duration-500" style={{ width: `${value}%`, background: color as string }} />
+              </div>
+            </div>
+          ))}
+          {report.realCompatibilityGap && (
+            <p className="text-[12.5px] text-text2 mt-3.5 leading-relaxed bg-bg rounded-rk p-2.5">{report.realCompatibilityGap}</p>
+          )}
+        </Card>
+        <Card className="p-5">
+          <h2 className="text-[14.5px] font-bold mb-2.5">{t.workspace.weightTitle}</h2>
+          <p className="text-[12.5px] text-text2 mb-3">{t.workspace.weightSubtitle}</p>
+          <div className="grid gap-2">
+            {(['kritik', 'əsas', 'üstünlük'] as const).map((tier) => (
+              <div key={tier} className="flex items-center gap-2.5 px-2.5 py-2 bg-bg rounded-rk">
+                <span className="px-2 py-0.5 rounded-full text-[11px] font-extrabold border border-navy text-navy bg-white">
+                  {t.workspace.importanceLabel[tier]} {t.workspace.weightMultipliers[tier]}
+                </span>
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
+
       <Card className="p-6">
         <h2 className="text-[16px] font-bold mb-4">{t.workspace.categoryTitle}</h2>
         <CategoryBarChart data={report.categoryScores} />
@@ -195,7 +244,7 @@ function ReportTab({ id }: { id: string }) {
               {filtered.map((r, i) => (
                 <tr key={i} className="border-b border-border align-top">
                   <td className="py-2.5 pr-3 font-medium">{r.title}</td>
-                  <td className="py-2.5 pr-3 text-text2">{r.category}</td>
+                  <td className="py-2.5 pr-3 text-text2">{localizeCategoryName(r.category, lang)}</td>
                   <td className="py-2.5 pr-3 text-text2">{t.workspace.importanceLabel[r.importance] || r.importance}</td>
                   <td className="py-2.5 pr-3">
                     <Badge tone={STATUS_TONE[r.status]}>{t.workspace.statusLabel[r.status]}</Badge>
@@ -213,7 +262,7 @@ function ReportTab({ id }: { id: string }) {
                 <span className="font-semibold text-[14px]">{r.title}</span>
                 <Badge tone={STATUS_TONE[r.status]}>{t.workspace.statusLabel[r.status]}</Badge>
               </div>
-              <div className="text-[12px] text-text2 mb-1">{r.category} · {t.workspace.importanceLabel[r.importance] || r.importance}</div>
+              <div className="text-[12px] text-text2 mb-1">{localizeCategoryName(r.category, lang)} · {t.workspace.importanceLabel[r.importance] || r.importance}</div>
               <div className="text-[13px] text-text2">{r.evidence || r.explanation}</div>
             </div>
           ))}
@@ -280,7 +329,16 @@ function CvTab({ id }: { id: string }) {
   useEffect(() => {
     getTailoredCv(id).then((r) => setCv(r.cv)).catch(() => {});
   }, [id]);
-  if (!cv) return <p className="text-text2">{t.workspace.cvLoadingText}</p>;
+  if (!cv) {
+    return (
+      <div className="py-10">
+        <GeneratingIllustration />
+        <div className="text-center mt-5 h-5">
+          <RotatingHint hints={t.workspace.cvGeneratingHints} className="text-[13px] text-info" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-6">
@@ -342,7 +400,16 @@ function CoverLetterTab({ id }: { id: string }) {
   useEffect(() => {
     getCoverLetter(id).then((r) => setLetter(r.letter)).catch(() => {});
   }, [id]);
-  if (!letter) return <p className="text-text2">{t.workspace.coverLetterLoadingText}</p>;
+  if (!letter) {
+    return (
+      <div className="py-10">
+        <GeneratingIllustration />
+        <div className="text-center mt-5 h-5">
+          <RotatingHint hints={t.workspace.coverLetterGeneratingHints} className="text-[13px] text-info" />
+        </div>
+      </div>
+    );
+  }
 
   const fullText = [letter.greeting, ...letter.body, letter.closing].join('\n\n');
 
@@ -395,7 +462,16 @@ function InterviewTab({ id }: { id: string }) {
   useEffect(() => {
     getInterviewPrep(id).then((r) => setPrep(r.prep)).catch(() => {});
   }, [id]);
-  if (!prep) return <p className="text-text2">{t.workspace.interviewLoadingText}</p>;
+  if (!prep) {
+    return (
+      <div className="py-10">
+        <InterviewIllustration />
+        <div className="text-center mt-5 h-5">
+          <RotatingHint hints={t.workspace.interviewGeneratingHints} className="text-[13px] text-info" />
+        </div>
+      </div>
+    );
+  }
 
   const sections = [
     { key: 'hr', label: t.workspace.hrQuestionsLabel, items: prep.hrQuestions },

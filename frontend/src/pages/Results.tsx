@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Info, AlertTriangle, Lock, CheckCircle2, TrendingUp, Users, Activity } from 'lucide-react';
+import { Info, AlertTriangle, Lock, CheckCircle2, TrendingUp, Users, Activity, Check, Trash2 } from 'lucide-react';
 import { AppHeader } from '../components/AppHeader';
 import { Button, Badge, Card } from '../components/ui';
 import { RadialGauge, CategoryBarChart } from '../components/charts';
-import { getAnalysis, getResult, type FreeResult, type AnalysisInfo } from '../lib/api';
+import { LifecycleState } from '../components/LifecycleState';
+import { DeleteConfirmDialog } from '../components/DeleteConfirmDialog';
+import { getAnalysis, getResult, submitSelfAttest, type FreeResult, type AnalysisInfo } from '../lib/api';
 import { useLanguage } from '../lib/i18n/LanguageContext';
 
 const STRENGTH_ICONS = [TrendingUp, Users, Activity];
@@ -16,7 +18,10 @@ export default function Results() {
   const [info, setInfo] = useState<AnalysisInfo | null>(null);
   const [result, setResult] = useState<FreeResult | null>(null);
   const [error, setError] = useState('');
+  const [lifecycleCode, setLifecycleCode] = useState<'expired' | 'deleted' | null>(null);
   const [tooltipOpen, setTooltipOpen] = useState(false);
+  const [selfAttest, setSelfAttest] = useState<boolean | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -24,9 +29,24 @@ export default function Results() {
       .then(([i, r]) => {
         setInfo(i);
         setResult(r);
+        setSelfAttest(i.selfAttestedGapConfirmed);
       })
-      .catch((err) => setError(err.message || t.results.errorFallback));
+      .catch((err) => {
+        if (err.status === 410 && (err.code === 'expired' || err.code === 'deleted')) {
+          setLifecycleCode(err.code);
+        } else {
+          setError(err.message || t.results.errorFallback);
+        }
+      });
   }, [id, t]);
+
+  async function answerSelfAttest(confirmed: boolean) {
+    if (!id) return;
+    setSelfAttest(confirmed);
+    await submitSelfAttest(id, confirmed).catch(() => setSelfAttest(null));
+  }
+
+  if (lifecycleCode) return <LifecycleState code={lifecycleCode} />;
 
   if (error) {
     return (
@@ -65,6 +85,17 @@ export default function Results() {
             <span className="text-[13px] font-semibold text-text2 mb-3 self-start">{t.results.kpiCompatTitle}</span>
             <RadialGauge value={result.compatibility} label={result.compatibilityLabel} />
             <p className="text-[12.5px] text-text2 mt-3">{t.results.kpiCompatText}</p>
+            {result.realCompatibility > result.compatibility && (
+              <div className="mt-3 pt-3 border-t border-border w-full">
+                <p className="text-[12px] text-premium font-medium">{t.results.realMatchTeaser}</p>
+                <button
+                  className="text-[11.5px] font-semibold text-teal hover:text-teal-h"
+                  onClick={() => navigate(`/pricing/${id}?pkg=1`)}
+                >
+                  {t.results.realMatchTeaserCta} →
+                </button>
+              </div>
+            )}
           </Card>
 
           <Card className="p-5">
@@ -148,9 +179,25 @@ export default function Results() {
               <div className="text-[15px] font-semibold">{result.mostImportantMissingRequirement}</div>
               <Badge tone="warning" className="my-2">{t.results.criticalGapBadge}</Badge>
               <p className="text-[13.5px] text-text2 leading-relaxed">{result.mostImportantMissingExplanation}</p>
-              <p className="text-[12.5px] text-text2 mt-2 italic">
+              <p className="text-[12.5px] text-text2 mt-2 italic mb-3">
                 {t.results.mostImportantNote}
               </p>
+              <div className="border border-dashed border-premium rounded-rc bg-premium-bg p-3.5">
+                <p className="text-[13px] font-semibold mb-2">
+                  {t.results.selfAttestQuestionPrefix} {result.mostImportantMissingRequirement} {t.results.selfAttestQuestionSuffix}
+                </p>
+                {selfAttest === null ? (
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="premium" onClick={() => answerSelfAttest(true)}>{t.results.selfAttestYes}</Button>
+                    <Button size="sm" variant="secondary" onClick={() => answerSelfAttest(false)}>{t.results.selfAttestNo}</Button>
+                  </div>
+                ) : (
+                  <div className="flex items-start gap-2 text-[12.5px] text-text leading-relaxed">
+                    <Check className="w-3.5 h-3.5 text-success flex-none mt-0.5" />
+                    {selfAttest ? t.results.selfAttestConfirmedYes : t.results.selfAttestConfirmedNo}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </Card>
@@ -196,7 +243,18 @@ export default function Results() {
             <Button variant="premium" onClick={() => navigate(`/pricing/${id}?pkg=1`)}>{t.results.openReportCta}</Button>
           </div>
         </Card>
+
+        <div className="text-center mt-8">
+          <button
+            className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-muted hover:text-danger"
+            onClick={() => setDeleteOpen(true)}
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            {t.results.deleteMyDataCta}
+          </button>
+        </div>
       </div>
+      {deleteOpen && id && <DeleteConfirmDialog analysisId={id} onClose={() => setDeleteOpen(false)} />}
     </div>
   );
 }

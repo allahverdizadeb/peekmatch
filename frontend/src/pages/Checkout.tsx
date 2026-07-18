@@ -1,11 +1,14 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ShieldCheck, CreditCard } from 'lucide-react';
 import { AppHeader } from '../components/AppHeader';
 import { Button, Card } from '../components/ui';
-import { createOrder } from '../lib/api';
+import { LifecycleState } from '../components/LifecycleState';
+import { createOrder, getAnalysis } from '../lib/api';
 import { useLanguage } from '../lib/i18n/LanguageContext';
 import type { Dict } from '../lib/i18n/locales';
+
+const PRICE_USD: Record<string, number> = { '1': 0.49, '2': 0.99, '3': 5.9 };
 
 function buildPackageNames(t: Dict): Record<string, { name: string; price: string; features: string[] }> {
   return {
@@ -21,8 +24,30 @@ export default function Checkout() {
   const { t } = useLanguage();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [owned, setOwned] = useState(0);
+  const [lifecycleCode, setLifecycleCode] = useState<'expired' | 'deleted' | null>(null);
+  const [notFound, setNotFound] = useState(false);
+
+  useEffect(() => {
+    if (!id) return;
+    getAnalysis(id)
+      .then((a) => setOwned(a.ownedPackage))
+      .catch((err) => {
+        if (err.status === 410 && (err.code === 'expired' || err.code === 'deleted')) {
+          setLifecycleCode(err.code);
+        } else if (err.status === 404) {
+          setNotFound(true);
+        }
+      });
+  }, [id]);
 
   const info = buildPackageNames(t)[pkg || '1'];
+  // Display-only preview of the server-computed upgrade diff — the actual charge is always
+  // computed server-side in POST /orders, this just avoids surprising the user at payment time.
+  const isUpgrade = owned > 0 && owned < Number(pkg || 1);
+  const basePriceUsd = PRICE_USD[pkg || '1'] ?? 0;
+  const creditUsd = isUpgrade ? PRICE_USD[String(owned)] ?? 0 : 0;
+  const amountDueUsd = Math.max(0, basePriceUsd - creditUsd);
 
   async function proceed() {
     if (!id || !pkg) return;
@@ -32,9 +57,26 @@ export default function Checkout() {
       const order = await createOrder(id, Number(pkg));
       navigate(`/payment/${order.id}`);
     } catch (err: any) {
-      setError(err.message || t.checkout.errGeneric);
+      if (err.status === 410 && (err.code === 'expired' || err.code === 'deleted')) {
+        setLifecycleCode(err.code);
+      } else if (err.status === 404) {
+        setNotFound(true);
+      } else {
+        setError(err.message || t.checkout.errGeneric);
+      }
       setLoading(false);
     }
+  }
+
+  if (lifecycleCode) return <LifecycleState code={lifecycleCode} />;
+
+  if (notFound) {
+    return (
+      <div className="max-w-[520px] mx-auto px-6 py-20 text-center">
+        <p className="text-danger text-[15px] mb-4">{t.checkout.notFound}</p>
+        <Button onClick={() => navigate('/analyze')}>{t.results.newAnalysisCta}</Button>
+      </div>
+    );
   }
 
   return (
@@ -50,10 +92,28 @@ export default function Checkout() {
                 <li key={f} className="text-[13px] text-text2">• {f}</li>
               ))}
             </ul>
-            <div className="flex justify-between items-center pt-3 border-t border-border">
-              <span className="text-[13.5px] text-text2">{t.checkout.priceLabel}</span>
-              <span className="text-[20px] font-extrabold text-navy">{info.price}</span>
-            </div>
+            {isUpgrade ? (
+              <div className="pt-3 border-t border-border grid gap-1.5">
+                <div className="flex justify-between text-[13.5px] text-text2">
+                  <span>{t.checkout.upgrade.newPackageLabel}</span>
+                  <span>{basePriceUsd.toFixed(2)} USD</span>
+                </div>
+                <div className="flex justify-between text-[13.5px] text-text2">
+                  <span>{t.checkout.upgrade.previouslyPaidLabel}</span>
+                  <span>− {creditUsd.toFixed(2)} USD</span>
+                </div>
+                <div className="flex justify-between items-center pt-2 border-t border-dashed border-border">
+                  <span className="text-[15px] font-bold">{t.checkout.upgrade.amountDueLabel}</span>
+                  <span className="text-[20px] font-extrabold text-navy">{amountDueUsd.toFixed(2)} USD</span>
+                </div>
+                <p className="text-[12px] text-muted">{t.checkout.upgrade.note}</p>
+              </div>
+            ) : (
+              <div className="flex justify-between items-center pt-3 border-t border-border">
+                <span className="text-[13.5px] text-text2">{t.checkout.priceLabel}</span>
+                <span className="text-[20px] font-extrabold text-navy">{info.price}</span>
+              </div>
+            )}
           </div>
 
           <div className="flex items-start gap-2.5 text-[13px] text-text2 mb-2">

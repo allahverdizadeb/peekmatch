@@ -15,6 +15,20 @@ function buildPackages(t: Dict) {
   ];
 }
 
+// Which paid packages (id 1/2/3) include each comparison-table row, in the same order as
+// t.pricing.comparisonRows.
+const COMPARISON_MATRIX: [boolean, boolean, boolean][] = [
+  [true, true, true],
+  [true, true, true],
+  [true, true, true],
+  [false, true, true],
+  [false, true, true],
+  [false, true, true],
+  [false, false, true],
+  [false, false, true],
+  [false, false, true],
+];
+
 export default function Pricing() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -49,7 +63,25 @@ export default function Pricing() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 items-stretch">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 items-stretch mb-14">
+          <Card className="p-6 flex flex-col border-dashed border-[1.5px] border-teal">
+            <h3 className="text-[17px] font-bold mb-1">{t.pricing.freeTier.name}</h3>
+            <div className="text-[26px] font-extrabold text-success mb-2">{t.pricing.freeTier.priceLabel}</div>
+            <p className="text-[13.5px] text-text2 mb-4">{t.pricing.freeTier.desc}</p>
+            <ul className="grid gap-2 mb-6 flex-1">
+              {t.pricing.freeTier.features.map((f) => (
+                <li key={f} className="text-[13px] text-text2 flex gap-2 items-start">
+                  <Check className="w-3.5 h-3.5 text-teal flex-none mt-0.5" />
+                  {f}
+                </li>
+              ))}
+            </ul>
+            {info?.status === 'done' ? (
+              <Badge tone="success" className="justify-center py-2.5">{t.pricing.ownedBadge}</Badge>
+            ) : (
+              <Button variant="secondary" onClick={() => navigate('/analyze')}>{t.pricing.freeTier.cta}</Button>
+            )}
+          </Card>
           {PACKAGES.map((p) => {
             const owned = (info?.ownedPackage || 0) >= p.id;
             return (
@@ -94,6 +126,35 @@ export default function Pricing() {
             );
           })}
         </div>
+
+        <h2 className="text-[20px] font-bold mb-4 text-center">{t.pricing.comparisonTitle}</h2>
+        <Card className="overflow-hidden overflow-x-auto">
+          <table className="w-full border-collapse min-w-[520px]">
+            <thead>
+              <tr className="bg-bg">
+                <th className="text-left px-5 py-3.5 text-[13px] font-bold">{t.pricing.comparisonFeatureLabel}</th>
+                {PACKAGES.map((p, i) => (
+                  <th key={p.id} className={'px-3 py-3.5 text-[13px] font-bold text-center ' + (i === 1 ? 'text-teal' : '')}>
+                    {p.price}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {t.pricing.comparisonRows.map((row, i) => (
+                <tr key={row} className="border-t border-border">
+                  <td className="px-5 py-3 text-[14px] text-text2">{row}</td>
+                  {COMPARISON_MATRIX[i].map((has, j) => (
+                    <td key={j} className="px-3 py-3 text-center">
+                      {has ? <Check className="w-[18px] h-[18px] text-teal inline-block" /> : <span className="text-border">—</span>}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Card>
+
         <p className="text-center text-[12.5px] text-muted mt-6">{t.pricing.footerNote}</p>
       </div>
     </div>

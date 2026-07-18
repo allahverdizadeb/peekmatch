@@ -1,0 +1,14 @@
+# This is a client-side SPA with a single static index.html for every route, so a per-page
+# <meta name="robots"> tag can't distinguish public marketing pages from private, UUID-bearing
+# user pages (a real server-rendered noindex header would need a routing layer this app doesn't
+# have). Disallowing the private path prefixes here is the practical mitigation: it doesn't stop a
+# non-compliant crawler, but it does correctly signal intent to Google/Bing/etc., which is the
+# realistic exposure path if a private link is ever shared or leaked (e.g. via a Referrer header).
+User-agent: *
+Disallow: /results/
+Disallow: /workspace/
+Disallow: /processing/
+Disallow: /checkout/
+Disallow: /payment/
+Disallow: /admin
+Allow: /

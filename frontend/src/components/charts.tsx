@@ -1,4 +1,6 @@
 import clsx from 'clsx';
+import { useLanguage } from '../lib/i18n/LanguageContext';
+import { localizeCategoryName } from '../lib/categoryLabel';
 
 function toneColor(pct: number): string {
   if (pct >= 70) return '#0F9D91';
@@ -83,12 +85,13 @@ export function RequirementDistributionBar({ met, partial, missing }: { met: num
 }
 
 export function CategoryBarChart({ data }: { data: { category: string; score: number }[] }) {
+  const { lang } = useLanguage();
   return (
     <div className="flex flex-col gap-3">
       {data.map((d) => (
         <div key={d.category}>
           <div className="flex justify-between text-[13.5px] mb-1">
-            <span className="font-medium text-text">{d.category}</span>
+            <span className="font-medium text-text">{localizeCategoryName(d.category, lang)}</span>
             <span className="font-bold text-navy">{d.score}%</span>
           </div>
           <div className="h-2.5 w-full rounded-full bg-bg2 overflow-hidden">

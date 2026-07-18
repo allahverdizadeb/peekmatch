@@ -1,6 +1,19 @@
 import Anthropic from '@anthropic-ai/sdk';
+import { applyScoringOverrides } from './scoring.js';
 
-const MODEL = 'claude-opus-4-8';
+// Cheapest current Claude tier, per explicit cost-cutting instruction (was claude-opus-4-8 for
+// every call). Used for generateTailoredCv, generateCoverLetter, and OCR — all verified to
+// reliably follow outputLanguage on real test runs.
+const MODEL = 'claude-haiku-4-5-20251001';
+const OCR_MODEL = MODEL;
+// analyzeMatch and generateInterviewPrep produce large, deeply-nested JSON (a `requirements[]` /
+// `hrQuestions[]`+`situational[]`+`technical[]` array of several objects, each with multiple free
+// text fields). Verified live that MODEL (haiku) does NOT reliably apply the outputLanguage
+// instruction to those nested fields — they kept coming back in Azerbaijani regardless of the
+// requested language, even after the system prompt was rewritten to explicitly call out every
+// nested field name. Stepping these two up to sonnet fixed it. Do not move these back to MODEL
+// without re-verifying nested-field language compliance with a real non-Azerbaijani test run.
+const ANALYSIS_MODEL = 'claude-sonnet-5';
 
 let client: Anthropic | null = null;
 function getClient(): Anthropic | null {
@@ -36,6 +49,8 @@ const matchResultSchema = {
     vacancyCompanyGuess: { type: 'string' },
     compatibility: { type: 'integer' },
     compatibilityLabel: { type: 'string' },
+    realCompatibility: { type: 'integer' },
+    realCompatibilityGap: { type: 'string' },
     mainRequirementsTotal: { type: 'integer' },
     mainRequirementsMet: { type: 'integer' },
     mainRequirementsPartial: { type: 'integer' },
@@ -105,6 +120,8 @@ const matchResultSchema = {
     'vacancyCompanyGuess',
     'compatibility',
     'compatibilityLabel',
+    'realCompatibility',
+    'realCompatibilityGap',
     'mainRequirementsTotal',
     'mainRequirementsMet',
     'mainRequirementsPartial',
@@ -133,6 +150,10 @@ export type MatchResult = {
   vacancyCompanyGuess: string;
   compatibility: number;
   compatibilityLabel: string;
+  /** Candidate's true underlying fit if their real experience were fully reflected in the CV — always >= compatibility. */
+  realCompatibility: number;
+  /** Short explanation of the gap between realCompatibility and compatibility (why the CV understates the real fit). */
+  realCompatibilityGap: string;
   mainRequirementsTotal: number;
   mainRequirementsMet: number;
   mainRequirementsPartial: number;
@@ -161,7 +182,48 @@ export type MatchResult = {
   improvementOpportunities: { title: string; impact: string }[];
 };
 
-const LANG_NAME: Record<string, string> = { az: 'Azərbaycan', en: 'English', tr: 'Türkçe', ru: 'Русский' };
+const LANG_NAME: Record<string, string> = { az: 'Azərbaycan', en: 'English' };
+
+/** User's answer to "do you actually have this experience, just not reflected in your CV?" for the
+ * single most-impactful missing requirement — null when never asked or not yet answered. */
+export type SelfAttestedGap = { requirement: string; confirmed: boolean } | null;
+
+function selfAttestPromptNote(gap: SelfAttestedGap): string {
+  if (!gap) return '';
+  return gap.confirmed
+    ? `\n\nNAMİZƏD TƏSDİQLƏDİ: Namizəd "${gap.requirement}" tələbi üzrə real təcrübəsi olduğunu, sadəcə CV-də tam əks olunmadığını təsdiqləyib. Bu təcrübəni dürüst və ümumi şəkildə (uydurma detallar olmadan) daxil et.`
+    : `\n\nNAMİZƏD TƏSDİQLƏDİ Kİ, YOXDUR: Namizəd "${gap.requirement}" tələbi üzrə təcrübəsi olmadığını bildirib. Bunu əlavə etmə və bu boşluğu açıq şəkildə necə izah edə biləcəyi barədə dürüst istiqamət ver.`;
+}
+
+/** Vision-based text extraction for image-only documents (e.g. a CV exported as a rasterized PDF
+ * with no real text layer). Returns null when no API key is configured — callers fall back to
+ * their normal "couldn't extract text" rejection in that case. */
+export async function ocrDocumentImages(images: { data: string; mediaType: 'image/png' | 'image/jpeg' }[]): Promise<string | null> {
+  const anthropic = getClient();
+  if (!anthropic) return null;
+
+  const response = await anthropic.messages.create({
+    model: OCR_MODEL,
+    max_tokens: 4000,
+    messages: [
+      {
+        role: 'user',
+        content: [
+          ...images.map((img) => ({
+            type: 'image' as const,
+            source: { type: 'base64' as const, media_type: img.mediaType, data: img.data },
+          })),
+          {
+            type: 'text' as const,
+            text: 'Bu şəkil(lər) bir sənədin səhifələridir (mətn qatı olmayan, şəkil əsaslı formatdan çıxarılıb). Şəkillərdə görünən BÜTÜN mətni, orijinal dilində və sırası ilə, sadə mətn formatında çıxar. Heç nə tərcümə etmə, şərh əlavə etmə, izah yazma — yalnız görünən mətni ötür.',
+          },
+        ],
+      },
+    ],
+  });
+  const block = response.content.find((b) => b.type === 'text');
+  return block && block.type === 'text' ? block.text.trim() : null;
+}
 
 export async function analyzeMatch(
   cvText: string,
@@ -181,14 +243,21 @@ Prinsiplər:
 - Qismən uyğunluq ilə real boşluğu fərqləndir.
 - Vakansiyadan 8-12 əsas tələb çıxar, hər birini kateqoriya, vaciblik (kritik/əsas/üstünlük), status və izahla qiymətləndir.
 - 7 kateqoriya üzrə bal ver: İş təcrübəsi, Texniki bacarıqlar, Proqram və alətlər, Sektor təcrübəsi, Təhsil, Dil bilikləri, İdarəetmə və əməkdaşlıq (0-100 arası, əsassız yüksək başlanğıc dəyər vermə).
-- Cavabı ${LANG_NAME[outputLanguage] || 'Azərbaycan'} dilində yaz (bütün mətn sahələri).
+- "compatibility" — CV-də YAZILANLARA əsasən görünən uyğunluq. "realCompatibility" — namizədin CV-də tam əks olunmayan, lakin real təcrübəsinə uyğun olan potensial uyğunluq (həmişə compatibility-dən böyük və ya bərabər olmalıdır). "realCompatibilityGap" sahəsində bu fərqin səbəbini qısa izah et (məs. CV-də bir bacarıq zəif təsvir olunub, amma kontekstdən real təcrübə göründüyü halda).
+- BÜTÜN sərbəst mətn sahələrini ${LANG_NAME[outputLanguage] || 'Azərbaycan'} dilində yaz — heç bir istisna yoxdur. Bura daxildir: compatibilityLabel, criticalGapSummary, mostImportantMissingRequirement, mostImportantMissingExplanation, recommendationStatus, recommendationReasons, recommendationNextAction, realCompatibilityGap, weakPresentation, improvementOpportunities, strengths (title/text/relatedRequirement), categoryScores-də "category" adları, VƏ requirements massivinin İÇİNDƏKİ hər elementin "title", "category", "evidence", "explanation" sahələri — bu daxili massiv sahələri xüsusilə tez-tez unudulur, onlara da eyni qayda tətbiq olunur. YALNIZ bu iki sahənin sabit dəyərləri dəyişməz qalmalıdır (bunlar tərcümə edilmir, kod onlara görə işləyir): "importance" (yalnız kritik/əsas/üstünlük) və "status" (yalnız met/partial/missing/insufficient_info).
 - Ton: dəstəkləyici, dürüst, mühakimə etməyən. Zəmanət verən dil işlətmə.`;
 
   const user = `CV MƏTNİ:\n"""\n${cvText.slice(0, 15000)}\n"""\n\nVAKANSİYA MƏTNİ:\n"""\n${vacancyText.slice(0, 15000)}\n"""\n\nYuxarıdakı CV-ni bu vakansiya ilə müqayisə et və tam strukturlaşdırılmış nəticə qaytar.`;
 
   const response = await anthropic.messages.create({
-    model: MODEL,
-    max_tokens: 8000,
+    model: ANALYSIS_MODEL,
+    // Vacancy text now comes from full-browser rendering (vacancyExtract.ts), which correctly
+    // captures JS-rendered job postings but can also pull in a lot of surrounding page noise
+    // (category sidebars, "similar postings" widgets) on some sites — that pushed a real response
+    // past the previous 8000-token budget, truncating the JSON mid-string and failing the whole
+    // analysis. Raised for headroom; if this still truncates on some page, the vacancy text itself
+    // needs tighter extraction, not a further bump here.
+    max_tokens: 16000,
     system,
     messages: [{ role: 'user', content: user }],
     output_config: { format: { type: 'json_schema', schema: matchResultSchema as any } },
@@ -196,7 +265,12 @@ Prinsiplər:
 
   const textBlock = response.content.find((b): b is Anthropic.TextBlock => b.type === 'text');
   if (!textBlock) throw new Error('AI cavabında mətn tapılmadı.');
-  return JSON.parse(textBlock.text) as MatchResult;
+  const result = JSON.parse(textBlock.text) as MatchResult;
+  // Downgrades unevidenced 'met' claims, then derives compatibility/categoryScores/requirement
+  // counts/criticalGapsCount deterministically from the (corrected) requirements — the
+  // authoritative score must be calculated by application logic, not freely generated by AI, and
+  // every confirmed match must have valid CV evidence (both product rules). See scoring.ts.
+  return applyScoringOverrides(result);
 }
 
 function offlineAnalyze(cvText: string, vacancyText: string): MatchResult {
@@ -220,6 +294,8 @@ function offlineAnalyze(cvText: string, vacancyText: string): MatchResult {
     vacancyCompanyGuess: 'Naməlum şirkət',
     compatibility,
     compatibilityLabel: compatibility >= 70 ? 'Yaxşı uyğunluq' : compatibility >= 45 ? 'Orta uyğunluq' : 'Zəif uyğunluq',
+    realCompatibility: compatibility,
+    realCompatibilityGap: 'AI konfiqurasiya olunmayıb — real və görünən uyğunluq fərqi hesablanmayıb.',
     mainRequirementsTotal: 10,
     mainRequirementsMet: Math.round((compatibility / 100) * 7),
     mainRequirementsPartial: 2,
@@ -301,6 +377,7 @@ export async function generateTailoredCv(
   vacancyText: string,
   match: MatchResult,
   outputLanguage: string,
+  selfAttestedGap: SelfAttestedGap = null,
 ): Promise<TailoredCv> {
   const anthropic = getClient();
   if (!anthropic) {
@@ -322,7 +399,7 @@ export async function generateTailoredCv(
   const user = `ORİJİNAL CV:\n"""\n${cvText.slice(0, 15000)}\n"""\n\nVAKANSİYA:\n"""\n${vacancyText.slice(0, 8000)}\n"""\n\nUYĞUNLUQ ANALİZİ XÜLASƏSİ: ${JSON.stringify({
     compatibility: match.compatibility,
     requirements: match.requirements.slice(0, 15),
-  })}\n\nBu CV-ni vakansiyaya uyğunlaşdır: professional summary-ni yenidən yaz, iş təcrübəsi bəndlərini vakansiyanın dilinə uyğun formalaşdır, skills bölməsini prioritetləşdir. changeExplanations sahəsində 3-5 qısa dəyişiklik izahı ver.`;
+  })}\n\nBu CV-ni vakansiyaya uyğunlaşdır: professional summary-ni yenidən yaz, iş təcrübəsi bəndlərini vakansiyanın dilinə uyğun formalaşdır, skills bölməsini prioritetləşdir. changeExplanations sahəsində 3-5 qısa dəyişiklik izahı ver.${selfAttestPromptNote(selfAttestedGap)}`;
 
   const response = await anthropic.messages.create({
     model: MODEL,
@@ -427,6 +504,7 @@ export async function generateInterviewPrep(
   vacancyText: string,
   match: MatchResult,
   outputLanguage: string,
+  selfAttestedGap: SelfAttestedGap = null,
 ): Promise<InterviewPrep> {
   const anthropic = getClient();
   if (!anthropic) {
@@ -441,13 +519,13 @@ export async function generateInterviewPrep(
       questionsToAsk: [],
     };
   }
-  const system = `Sən namizədi müsahibəyə hazırlayan köməkçisən. Suallar vakansiyaya və CV-yə əsaslanmalıdır. Olmayan təcrübəni uydurma — boşluqlar üçün namizədə açıq və dürüst cavab istiqaməti ver. Mətni ${LANG_NAME[outputLanguage] || 'Azərbaycan'} dilində yaz.`;
+  const system = `Sən namizədi müsahibəyə hazırlayan köməkçisən. Suallar vakansiyaya və CV-yə əsaslanmalıdır. Olmayan təcrübəni uydurma — boşluqlar üçün namizədə açıq və dürüst cavab istiqaməti ver. BÜTÜN mətn sahələrini ${LANG_NAME[outputLanguage] || 'Azərbaycan'} dilində yaz — heç bir istisna yoxdur, bura hrQuestions/situational/technical massivlərinin İÇİNDƏKİ hər elementin "question", "why" və "answerFramework" sahələri də daxildir (bu daxili massiv sahələri xüsusilə tez-tez unudulur).`;
   const user = `CV:\n"""\n${cvText.slice(0, 12000)}\n"""\n\nVAKANSİYA:\n"""\n${vacancyText.slice(0, 8000)}\n"""\n\nUYĞUNLUQ ANALİZİ: ${JSON.stringify({
     requirements: match.requirements.slice(0, 15),
     strengths: match.strengths,
-  })}\n\n3-4 HR sualı, 3-4 situasiya sualı, 3-4 texniki sual, "Tell me about yourself" cavabı, kritik boşluqların izahı və müsahibəçiyə veriləcək 3-4 sual hazırla.`;
+  })}\n\n3-4 HR sualı, 3-4 situasiya sualı, 3-4 texniki sual, "Tell me about yourself" cavabı, kritik boşluqların izahı və müsahibəçiyə veriləcək 3-4 sual hazırla.${selfAttestPromptNote(selfAttestedGap)}`;
   const response = await anthropic.messages.create({
-    model: MODEL,
+    model: ANALYSIS_MODEL,
     max_tokens: 6000,
     system,
     messages: [{ role: 'user', content: user }],

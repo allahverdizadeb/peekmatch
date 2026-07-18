@@ -3,25 +3,26 @@ import multer from 'multer';
 import { prisma } from '../db.js';
 import { extractCvText, CvParseError, MAX_CV_BYTES, MIN_CV_TEXT_CHARS } from '../lib/cvParse.js';
 import { extractVacancyFromUrl, VacancyExtractError, MIN_VACANCY_TEXT_CHARS } from '../lib/vacancyExtract.js';
-import { analyzeMatch, generateTailoredCv, generateCoverLetter, generateInterviewPrep, type MatchResult } from '../lib/anthropic.js';
-import { cvToDocx, cvToPdf, coverLetterToDocx, reportToPdf } from '../lib/docGen.js';
-import { highestOwnedPackage, unlocksReport, unlocksCv, unlocksInterview } from '../lib/pricing.js';
+import {
+  analyzeMatch,
+  generateTailoredCv,
+  generateCoverLetter,
+  generateInterviewPrep,
+  type MatchResult,
+  type SelfAttestedGap,
+} from '../lib/anthropic.js';
+import { cvToDocx, cvToPdf, coverLetterToDocx, reportToPdf, getReportLabels, docFileName, escapeHtml } from '../lib/docGen.js';
+import { highestOwnedPackage, ownedPackages, unlocksReport, unlocksCv, unlocksInterview } from '../lib/pricing.js';
+import { resolveAnalysis, respondUnresolved, type AnalysisRow } from '../lib/analysisLifecycle.js';
 
 const upload = multer({ limits: { fileSize: MAX_CV_BYTES } });
 const RETENTION_MS = 24 * 60 * 60 * 1000;
 
 export const analysesRouter = Router();
 
-async function getAnalysisOr404(id: string) {
-  const a = await prisma.analysis.findUnique({ where: { id } });
-  if (!a) return null;
-  if (a.expiresAt.getTime() < Date.now()) return null;
-  return a;
-}
-
-async function ownedPackages(analysisId: string): Promise<number[]> {
-  const orders = await prisma.order.findMany({ where: { analysisId, status: 'paid' } });
-  return orders.map((o) => o.package);
+function buildSelfAttestedGap(analysis: AnalysisRow, full: MatchResult): SelfAttestedGap {
+  if (analysis.selfAttestedGapConfirmed == null) return null;
+  return { requirement: full.mostImportantMissingRequirement, confirmed: analysis.selfAttestedGapConfirmed };
 }
 
 // ---------- create analysis (CV upload) ----------
@@ -77,8 +78,9 @@ analysesRouter.post('/', upload.single('cvFile'), async (req, res) => {
 
 // ---------- vacancy: URL extraction ----------
 analysesRouter.post('/:id/vacancy/url', async (req, res) => {
-  const analysis = await getAnalysisOr404(req.params.id);
-  if (!analysis) return res.status(404).json({ error: 'Analiz tapılmadı.' });
+  const resolved = await resolveAnalysis(req.params.id);
+  if (resolved.kind !== 'ok') return respondUnresolved(res, resolved);
+  const analysis = resolved.analysis;
   const url = (req.body.url as string) || '';
 
   await prisma.analysis.update({ where: { id: analysis.id }, data: { vacancyStatus: 'loading', vacancyUrl: url } });
@@ -111,8 +113,9 @@ analysesRouter.post('/:id/vacancy/url', async (req, res) => {
 
 // ---------- vacancy: manual text fallback ----------
 analysesRouter.post('/:id/vacancy/manual', async (req, res) => {
-  const analysis = await getAnalysisOr404(req.params.id);
-  if (!analysis) return res.status(404).json({ error: 'Analiz tapılmadı.' });
+  const resolved = await resolveAnalysis(req.params.id);
+  if (resolved.kind !== 'ok') return respondUnresolved(res, resolved);
+  const analysis = resolved.analysis;
   const text = (req.body.text as string) || '';
   if (text.length < MIN_VACANCY_TEXT_CHARS) {
     return res.status(400).json({ error: `Minimum ${MIN_VACANCY_TEXT_CHARS} simvol tələb olunur.` });
@@ -126,21 +129,76 @@ analysesRouter.post('/:id/vacancy/manual', async (req, res) => {
 
 // ---------- settings (language, consent) ----------
 analysesRouter.patch('/:id/settings', async (req, res) => {
-  const analysis = await getAnalysisOr404(req.params.id);
-  if (!analysis) return res.status(404).json({ error: 'Analiz tapılmadı.' });
+  const resolved = await resolveAnalysis(req.params.id);
+  if (resolved.kind !== 'ok') return respondUnresolved(res, resolved);
   const data: { outputLanguage?: string; consent?: boolean } = {};
   if (typeof req.body.outputLanguage === 'string') data.outputLanguage = req.body.outputLanguage;
   if (typeof req.body.consent === 'boolean') data.consent = req.body.consent;
-  await prisma.analysis.update({ where: { id: analysis.id }, data });
+  await prisma.analysis.update({ where: { id: resolved.analysis.id }, data });
+  res.json({ ok: true });
+});
+
+// ---------- self-attestation (Power BI-style "do you actually have this?" prompt) ----------
+analysesRouter.patch('/:id/self-attest', async (req, res) => {
+  const resolved = await resolveAnalysis(req.params.id);
+  if (resolved.kind !== 'ok') return respondUnresolved(res, resolved);
+  if (typeof req.body.confirmed !== 'boolean') return res.status(400).json({ error: 'Yanlış dəyər.' });
+  const analysis = resolved.analysis;
+  // If a tailored CV/cover letter/interview prep was already generated with the old answer,
+  // invalidate the caches so the next fetch regenerates using the new answer.
+  const changed = analysis.selfAttestedGapConfirmed !== req.body.confirmed;
+  await prisma.analysis.update({
+    where: { id: analysis.id },
+    data: {
+      selfAttestedGapConfirmed: req.body.confirmed,
+      ...(changed ? { tailoredCvJson: null, coverLetterJson: null, interviewPrepJson: null } : {}),
+    },
+  });
+  res.json({ ok: true });
+});
+
+// ---------- delete (user-triggered, immediate) ----------
+analysesRouter.delete('/:id', async (req, res) => {
+  const resolved = await resolveAnalysis(req.params.id);
+  if (resolved.kind !== 'ok') return respondUnresolved(res, resolved);
+  await prisma.analysis.update({
+    where: { id: resolved.analysis.id },
+    data: {
+      deletedAt: new Date(),
+      cvText: null,
+      cvFileName: null,
+      cvMimeType: null,
+      cvSizeBytes: null,
+      vacancyUrl: null,
+      vacancyText: null,
+      vacancyTitle: null,
+      vacancyCompany: null,
+      vacancyLocation: null,
+      vacancyDomain: null,
+      resultJson: null,
+      reportJson: null,
+      tailoredCvJson: null,
+      coverLetterJson: null,
+      interviewPrepJson: null,
+    },
+  });
   res.json({ ok: true });
 });
 
 // ---------- start processing ----------
 analysesRouter.post('/:id/start', async (req, res) => {
-  const analysis = await getAnalysisOr404(req.params.id);
-  if (!analysis) return res.status(404).json({ error: 'Analiz tapılmadı.' });
+  const resolved = await resolveAnalysis(req.params.id);
+  if (resolved.kind !== 'ok') return respondUnresolved(res, resolved);
+  const analysis = resolved.analysis;
   if (!analysis.cvText || !analysis.vacancyText || !analysis.consent) {
     return res.status(400).json({ error: 'CV və vakansiya məlumatlarını tamamlayın.' });
+  }
+  // Without this guard, a double-click, network retry, or duplicate request would spawn a second
+  // concurrent runAnalysis() background job for the same id — each making its own real AI call
+  // (wasted cost) and racing to write resultJson, with whichever finishes last silently winning.
+  // Idempotent: already processing/done just reports the current state instead of erroring.
+  if (analysis.status === 'processing' || analysis.status === 'done') {
+    return res.json({ status: analysis.status });
   }
 
   await prisma.analysis.update({ where: { id: analysis.id }, data: { status: 'processing', procStage: 1 } });
@@ -160,8 +218,13 @@ async function runAnalysis(id: string) {
   if (!analysis || !analysis.cvText || !analysis.vacancyText) return;
   try {
     const result = await analyzeMatch(analysis.cvText, analysis.vacancyText, analysis.outputLanguage);
-    await prisma.analysis.update({
-      where: { id },
+    // The real AI call above can take 15-90+ seconds — long enough for the user to hit "delete my
+    // data" while it's in flight. Writing resultJson back unconditionally would silently resurrect
+    // content that was just nulled, defeating immediate deletion. updateMany (not update) lets the
+    // WHERE clause filter on deletedAt: a row deleted in the meantime simply won't match, so this
+    // becomes a no-op instead of undoing the deletion.
+    await prisma.analysis.updateMany({
+      where: { id, deletedAt: null },
       data: {
         status: 'done',
         procStage: 6,
@@ -172,20 +235,22 @@ async function runAnalysis(id: string) {
     });
   } catch (err) {
     console.error('[analyzeMatch]', err);
-    await prisma.analysis.update({ where: { id }, data: { status: 'failed', failReason: 'Analiz tamamlanmadı.' } });
+    await prisma.analysis.updateMany({ where: { id, deletedAt: null }, data: { status: 'failed', failReason: 'Analiz tamamlanmadı.' } });
   }
 }
 
 // ---------- status / result ----------
 analysesRouter.get('/:id/status', async (req, res) => {
-  const analysis = await getAnalysisOr404(req.params.id);
-  if (!analysis) return res.status(404).json({ error: 'Analiz tapılmadı.' });
+  const resolved = await resolveAnalysis(req.params.id);
+  if (resolved.kind !== 'ok') return respondUnresolved(res, resolved);
+  const analysis = resolved.analysis;
   res.json({ status: analysis.status, procStage: analysis.procStage, failReason: analysis.failReason });
 });
 
 analysesRouter.get('/:id', async (req, res) => {
-  const analysis = await getAnalysisOr404(req.params.id);
-  if (!analysis) return res.status(404).json({ error: 'Analiz tapılmadı.' });
+  const resolved = await resolveAnalysis(req.params.id);
+  if (resolved.kind !== 'ok') return respondUnresolved(res, resolved);
+  const analysis = resolved.analysis;
   const owned = highestOwnedPackage(await ownedPackages(analysis.id));
   res.json({
     id: analysis.id,
@@ -202,22 +267,26 @@ analysesRouter.get('/:id', async (req, res) => {
     createdAt: analysis.createdAt,
     expiresAt: analysis.expiresAt,
     ownedPackage: owned,
+    selfAttestedGapConfirmed: analysis.selfAttestedGapConfirmed,
   });
 });
 
 analysesRouter.get('/:id/result', async (req, res) => {
-  const analysis = await getAnalysisOr404(req.params.id);
-  if (!analysis) return res.status(404).json({ error: 'Analiz tapılmadı.' });
+  const resolved = await resolveAnalysis(req.params.id);
+  if (resolved.kind !== 'ok') return respondUnresolved(res, resolved);
+  const analysis = resolved.analysis;
   if (analysis.status !== 'done' || !analysis.resultJson) {
     return res.status(409).json({ error: 'Analiz hələ hazır deyil.' });
   }
   const full: MatchResult = JSON.parse(analysis.resultJson);
   const owned = highestOwnedPackage(await ownedPackages(analysis.id));
   // Free dashboard: everything except the full requirement matrix / weak presentation / improvement ranking.
+  // realCompatibility ships here as an upsell teaser; realCompatibilityGap (the "why") stays report-gated.
   res.json({
     vacancy: { title: analysis.vacancyTitle, company: analysis.vacancyCompany, location: analysis.vacancyLocation },
     compatibility: full.compatibility,
     compatibilityLabel: full.compatibilityLabel,
+    realCompatibility: full.realCompatibility,
     mainRequirementsTotal: full.mainRequirementsTotal,
     mainRequirementsMet: full.mainRequirementsMet,
     mainRequirementsPartial: full.mainRequirementsPartial,
@@ -236,13 +305,15 @@ analysesRouter.get('/:id/result', async (req, res) => {
     recommendationNextAction: full.recommendationNextAction,
     requirementsPreview: full.requirements.slice(0, 2),
     ownedPackage: owned,
+    selfAttestedGapConfirmed: analysis.selfAttestedGapConfirmed,
   });
 });
 
 // ---------- paid: full report ----------
 analysesRouter.get('/:id/report', async (req, res) => {
-  const analysis = await getAnalysisOr404(req.params.id);
-  if (!analysis) return res.status(404).json({ error: 'Analiz tapılmadı.' });
+  const resolved = await resolveAnalysis(req.params.id);
+  if (resolved.kind !== 'ok') return respondUnresolved(res, resolved);
+  const analysis = resolved.analysis;
   const owned = highestOwnedPackage(await ownedPackages(analysis.id));
   if (!unlocksReport(owned)) return res.status(402).json({ error: 'Bu paket alınmayıb.', ownedPackage: owned });
   if (!analysis.resultJson) return res.status(409).json({ error: 'Analiz hazır deyil.' });
@@ -250,6 +321,8 @@ analysesRouter.get('/:id/report', async (req, res) => {
   res.json({
     vacancy: { title: analysis.vacancyTitle, company: analysis.vacancyCompany, location: analysis.vacancyLocation },
     compatibility: full.compatibility,
+    realCompatibility: full.realCompatibility,
+    realCompatibilityGap: full.realCompatibilityGap,
     mainRequirementsTotal: full.mainRequirementsTotal,
     mainRequirementsMet: full.mainRequirementsMet,
     criticalGapsCount: full.criticalGapsCount,
@@ -264,26 +337,28 @@ analysesRouter.get('/:id/report', async (req, res) => {
 });
 
 analysesRouter.get('/:id/report/download', async (req, res) => {
-  const analysis = await getAnalysisOr404(req.params.id);
-  if (!analysis) return res.status(404).json({ error: 'Analiz tapılmadı.' });
+  const resolved = await resolveAnalysis(req.params.id);
+  if (resolved.kind !== 'ok') return respondUnresolved(res, resolved);
+  const analysis = resolved.analysis;
   const owned = highestOwnedPackage(await ownedPackages(analysis.id));
   if (!unlocksReport(owned)) return res.status(402).json({ error: 'Bu paket alınmayıb.' });
   if (!analysis.resultJson) return res.status(409).json({ error: 'Analiz hazır deyil.' });
   const full: MatchResult = JSON.parse(analysis.resultJson);
+  const labels = getReportLabels(analysis.outputLanguage);
   const rows = full.requirements
     .map(
       (r) =>
-        `<tr><td>${r.title}</td><td>${r.category}</td><td>${r.importance}</td><td>${r.status}</td><td>${r.evidence || '—'}</td></tr>`,
+        `<tr><td>${escapeHtml(r.title)}</td><td>${escapeHtml(r.category)}</td><td>${escapeHtml(labels.importanceLabel[r.importance] || r.importance)}</td><td>${escapeHtml(labels.statusLabel[r.status] || r.status)}</td><td>${escapeHtml(r.evidence) || '—'}</td></tr>`,
     )
     .join('');
-  const html = `<h2>Uyğunluq: ${full.compatibility}% · ${full.mainRequirementsMet}/${full.mainRequirementsTotal} əsas tələb</h2>
-    <p>${full.recommendationStatus}</p>
+  const html = `<h2>${labels.compatibilityLine(full.compatibility, full.mainRequirementsMet, full.mainRequirementsTotal)}</h2>
+    <p>${escapeHtml(full.recommendationStatus)}</p>
     <table border="1" cellpadding="6" style="border-collapse:collapse;width:100%;font-size:11px">
-      <tr><th>Tələb</th><th>Kateqoriya</th><th>Vaciblik</th><th>Status</th><th>Sübut</th></tr>${rows}
+      <tr>${labels.tableHeaders.map((h) => `<th>${h}</th>`).join('')}</tr>${rows}
     </table>`;
-  const pdf = await reportToPdf(analysis.vacancyTitle || 'Vakansiya', analysis.vacancyCompany || '', html);
+  const pdf = await reportToPdf(analysis.vacancyTitle || 'Vakansiya', analysis.vacancyCompany || '', html, analysis.outputLanguage);
   res.setHeader('Content-Type', 'application/pdf');
-  res.setHeader('Content-Disposition', 'attachment; filename="Uygunluq_Hesabati.pdf"');
+  res.setHeader('Content-Disposition', `attachment; filename="${docFileName('report', analysis.outputLanguage)}.pdf"`);
   res.send(pdf);
 });
 
@@ -293,14 +368,21 @@ async function ensureTailoredCv(analysisId: string) {
   if (!analysis) throw new Error('not found');
   if (analysis.tailoredCvJson) return JSON.parse(analysis.tailoredCvJson);
   const full: MatchResult = JSON.parse(analysis.resultJson!);
-  const cv = await generateTailoredCv(analysis.cvText!, analysis.vacancyText!, full, analysis.outputLanguage);
+  const cv = await generateTailoredCv(
+    analysis.cvText!,
+    analysis.vacancyText!,
+    full,
+    analysis.outputLanguage,
+    buildSelfAttestedGap(analysis, full),
+  );
   await prisma.analysis.update({ where: { id: analysisId }, data: { tailoredCvJson: JSON.stringify(cv) } });
   return cv;
 }
 
 analysesRouter.get('/:id/cv', async (req, res) => {
-  const analysis = await getAnalysisOr404(req.params.id);
-  if (!analysis) return res.status(404).json({ error: 'Analiz tapılmadı.' });
+  const resolved = await resolveAnalysis(req.params.id);
+  if (resolved.kind !== 'ok') return respondUnresolved(res, resolved);
+  const analysis = resolved.analysis;
   const owned = highestOwnedPackage(await ownedPackages(analysis.id));
   if (!unlocksCv(owned)) return res.status(402).json({ error: 'Bu paket alınmayıb.', ownedPackage: owned });
   try {
@@ -313,21 +395,23 @@ analysesRouter.get('/:id/cv', async (req, res) => {
 });
 
 analysesRouter.get('/:id/cv/download', async (req, res) => {
-  const analysis = await getAnalysisOr404(req.params.id);
-  if (!analysis) return res.status(404).json({ error: 'Analiz tapılmadı.' });
+  const resolved = await resolveAnalysis(req.params.id);
+  if (resolved.kind !== 'ok') return respondUnresolved(res, resolved);
+  const analysis = resolved.analysis;
   const owned = highestOwnedPackage(await ownedPackages(analysis.id));
   if (!unlocksCv(owned)) return res.status(402).json({ error: 'Bu paket alınmayıb.' });
   const cv = await ensureTailoredCv(analysis.id);
   const format = req.query.format === 'pdf' ? 'pdf' : 'docx';
+  const fileName = docFileName('cv', analysis.outputLanguage);
   if (format === 'pdf') {
-    const pdf = await cvToPdf(cv);
+    const pdf = await cvToPdf(cv, analysis.outputLanguage);
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', 'attachment; filename="CV_Uygunlasdirilmis.pdf"');
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}.pdf"`);
     res.send(pdf);
   } else {
-    const docx = await cvToDocx(cv);
+    const docx = await cvToDocx(cv, analysis.outputLanguage);
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
-    res.setHeader('Content-Disposition', 'attachment; filename="CV_Uygunlasdirilmis.docx"');
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}.docx"`);
     res.send(docx);
   }
 });
@@ -344,8 +428,9 @@ async function ensureCoverLetter(analysisId: string) {
 }
 
 analysesRouter.get('/:id/cover-letter', async (req, res) => {
-  const analysis = await getAnalysisOr404(req.params.id);
-  if (!analysis) return res.status(404).json({ error: 'Analiz tapılmadı.' });
+  const resolved = await resolveAnalysis(req.params.id);
+  if (resolved.kind !== 'ok') return respondUnresolved(res, resolved);
+  const analysis = resolved.analysis;
   const owned = highestOwnedPackage(await ownedPackages(analysis.id));
   if (!unlocksCv(owned)) return res.status(402).json({ error: 'Bu paket alınmayıb.', ownedPackage: owned });
   try {
@@ -358,14 +443,15 @@ analysesRouter.get('/:id/cover-letter', async (req, res) => {
 });
 
 analysesRouter.get('/:id/cover-letter/download', async (req, res) => {
-  const analysis = await getAnalysisOr404(req.params.id);
-  if (!analysis) return res.status(404).json({ error: 'Analiz tapılmadı.' });
+  const resolved = await resolveAnalysis(req.params.id);
+  if (resolved.kind !== 'ok') return respondUnresolved(res, resolved);
+  const analysis = resolved.analysis;
   const owned = highestOwnedPackage(await ownedPackages(analysis.id));
   if (!unlocksCv(owned)) return res.status(402).json({ error: 'Bu paket alınmayıb.' });
   const letter = await ensureCoverLetter(analysis.id);
   const docx = await coverLetterToDocx(letter, analysis.vacancyTitle || '', analysis.vacancyCompany || '');
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
-  res.setHeader('Content-Disposition', 'attachment; filename="Cover_Letter.docx"');
+  res.setHeader('Content-Disposition', `attachment; filename="${docFileName('coverLetter', analysis.outputLanguage)}.docx"`);
   res.send(docx);
 });
 
@@ -375,14 +461,21 @@ async function ensureInterviewPrep(analysisId: string) {
   if (!analysis) throw new Error('not found');
   if (analysis.interviewPrepJson) return JSON.parse(analysis.interviewPrepJson);
   const full: MatchResult = JSON.parse(analysis.resultJson!);
-  const prep = await generateInterviewPrep(analysis.cvText!, analysis.vacancyText!, full, analysis.outputLanguage);
+  const prep = await generateInterviewPrep(
+    analysis.cvText!,
+    analysis.vacancyText!,
+    full,
+    analysis.outputLanguage,
+    buildSelfAttestedGap(analysis, full),
+  );
   await prisma.analysis.update({ where: { id: analysisId }, data: { interviewPrepJson: JSON.stringify(prep) } });
   return prep;
 }
 
 analysesRouter.get('/:id/interview', async (req, res) => {
-  const analysis = await getAnalysisOr404(req.params.id);
-  if (!analysis) return res.status(404).json({ error: 'Analiz tapılmadı.' });
+  const resolved = await resolveAnalysis(req.params.id);
+  if (resolved.kind !== 'ok') return respondUnresolved(res, resolved);
+  const analysis = resolved.analysis;
   const owned = highestOwnedPackage(await ownedPackages(analysis.id));
   if (!unlocksInterview(owned)) return res.status(402).json({ error: 'Bu paket alınmayıb.', ownedPackage: owned });
   try {

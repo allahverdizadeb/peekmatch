@@ -73,16 +73,27 @@ export interface AnalysisInfo {
   createdAt: string;
   expiresAt: string;
   ownedPackage: number;
+  selfAttestedGapConfirmed: boolean | null;
 }
 
 export function getAnalysis(id: string) {
   return req<AnalysisInfo>(`/analyses/${id}`);
 }
 
+export function deleteAnalysis(id: string) {
+  return req<{ ok: true }>(`/analyses/${id}`, { method: 'DELETE' });
+}
+
+export function submitSelfAttest(id: string, confirmed: boolean) {
+  return req<{ ok: true }>(`/analyses/${id}/self-attest`, { method: 'PATCH', body: JSON.stringify({ confirmed }) });
+}
+
 export interface FreeResult {
   vacancy: { title: string; company: string; location: string };
   compatibility: number;
   compatibilityLabel: string;
+  /** Candidate's true underlying fit if experience were fully reflected in the CV — always >= compatibility. */
+  realCompatibility: number;
   mainRequirementsTotal: number;
   mainRequirementsMet: number;
   mainRequirementsPartial: number;
@@ -100,6 +111,7 @@ export interface FreeResult {
   recommendationReasons: string[];
   recommendationNextAction: string;
   ownedPackage: number;
+  selfAttestedGapConfirmed: boolean | null;
 }
 
 export function getResult(id: string) {
@@ -118,6 +130,8 @@ export interface RequirementRow {
 export interface FullReport {
   vacancy: { title: string; company: string; location: string };
   compatibility: number;
+  realCompatibility: number;
+  realCompatibilityGap: string;
   mainRequirementsTotal: number;
   mainRequirementsMet: number;
   criticalGapsCount: number;
@@ -185,6 +199,8 @@ export interface Order {
   package: number;
   amountUsd: number;
   status: 'pending' | 'processing' | 'paid' | 'failed';
+  basePriceUsd?: number;
+  creditUsd?: number;
 }
 
 export function createOrder(analysisId: string, pkg: number) {
@@ -197,6 +213,14 @@ export function getOrder(id: string) {
 
 export function simulatePayment(id: string, outcome: 'success' | 'fail') {
   return req<{ status: string }>(`/orders/${id}/simulate`, { method: 'POST', body: JSON.stringify({ outcome }) });
+}
+
+// ---------- suggestions (public submit; admin read lives in lib/adminApi.ts) ----------
+
+export type SuggestionCategory = 'Funksionallıq' | 'Dizayn' | 'Qiymət' | 'Digər';
+
+export function submitSuggestion(category: SuggestionCategory, text: string, email: string) {
+  return req<{ ok: true }>('/suggestions', { method: 'POST', body: JSON.stringify({ category, text, email }) });
 }
 
 export { req as apiRequest };

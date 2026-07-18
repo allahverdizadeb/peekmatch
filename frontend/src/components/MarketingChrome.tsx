@@ -1,8 +1,9 @@
-import { useNavigate, useLocation } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Logo } from './Logo';
 import { Button } from './ui';
 import { LanguageSwitcher } from './LanguageSwitcher';
 import { useLanguage } from '../lib/i18n/LanguageContext';
+import { LANGUAGES } from '../lib/i18n/locales';
 
 function useScrollToSection() {
   const navigate = useNavigate();
@@ -45,7 +46,7 @@ export function MarketingHeader() {
 export function Footer() {
   const navigate = useNavigate();
   const scrollTo = useScrollToSection();
-  const { t } = useLanguage();
+  const { t, lang, setLang } = useLanguage();
   return (
     <footer className="bg-surface border-t border-border">
       <div className="max-w-[1200px] mx-auto px-6 pt-12 pb-8 grid grid-cols-1 md:grid-cols-[1.4fr_1fr_1fr] gap-10">
@@ -57,6 +58,7 @@ export function Footer() {
           <div className="text-[13px] font-bold text-muted uppercase tracking-wider mb-3.5">{t.footer.productLabel}</div>
           <div className="grid gap-2.5 text-[14px] text-text2">
             <button onClick={() => scrollTo('sec-how')} className="text-left hover:text-teal">{t.footer.howItWorks}</button>
+            <button onClick={() => scrollTo('sec-result')} className="text-left hover:text-teal">{t.footer.sampleResult}</button>
             <button onClick={() => scrollTo('sec-pricing')} className="text-left hover:text-teal">{t.footer.pricing}</button>
             <button onClick={() => navigate('/analyze')} className="text-left hover:text-teal">{t.footer.freeAnalysis}</button>
           </div>
@@ -64,14 +66,29 @@ export function Footer() {
         <div>
           <div className="text-[13px] font-bold text-muted uppercase tracking-wider mb-3.5">{t.footer.legalLabel}</div>
           <div className="grid gap-2.5 text-[14px] text-text2">
-            <span>{t.footer.privacy}</span>
-            <span>{t.footer.terms}</span>
-            <span>{t.footer.dataDelete}</span>
+            <Link to="/privacy" className="text-left hover:text-teal">{t.footer.privacy}</Link>
+            <Link to="/terms" className="text-left hover:text-teal">{t.footer.terms}</Link>
+            <Link to="/deletion" className="text-left hover:text-teal">{t.footer.dataDelete}</Link>
           </div>
         </div>
       </div>
       <div className="max-w-[1200px] mx-auto px-6 pb-7 pt-5 border-t border-border flex justify-between items-center flex-wrap gap-3">
         <span className="text-[13px] text-muted">{t.footer.copyright}</span>
+        <div className="flex items-center gap-4">
+          {LANGUAGES.map((l) => (
+            <button
+              key={l.code}
+              onClick={() => setLang(l.code)}
+              className={
+                'inline-flex items-center gap-1.5 text-[13px] whitespace-nowrap ' +
+                (l.code === lang ? 'font-bold text-teal' : 'font-medium text-muted hover:text-text2')
+              }
+            >
+              <span>{l.flag}</span>
+              {l.code.toUpperCase()}
+            </button>
+          ))}
+        </div>
       </div>
     </footer>
   );

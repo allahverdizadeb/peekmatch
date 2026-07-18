@@ -8,7 +8,7 @@ const DEFAULT_LANG: Lang = 'az';
 
 function readStoredLang(): Lang {
   const v = typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEY) : null;
-  return v === 'az' || v === 'en' || v === 'tr' || v === 'ru' ? v : DEFAULT_LANG;
+  return v === 'az' || v === 'en' ? v : DEFAULT_LANG;
 }
 
 type LanguageContextValue = { lang: Lang; setLang: (l: Lang) => void; t: Dict };

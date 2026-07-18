@@ -384,7 +384,7 @@ export default function AnalysisForm() {
           <div className="mb-8">
             <label className="block text-[15px] font-semibold mb-3">{t.analysisForm.step3Label}</label>
             <div className="flex gap-2">
-              {(['az', 'en', 'tr', 'ru'] as const).map((code) => (
+              {(['az', 'en'] as const).map((code) => (
                 <button
                   key={code}
                   onClick={() => setOutputLanguage(code)}

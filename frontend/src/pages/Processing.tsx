@@ -14,9 +14,13 @@ export default function Processing() {
   const { t } = useLanguage();
   const [stage, setStage] = useState(0);
   const [failed, setFailed] = useState<string | null>(null);
+  const [hintIndex, setHintIndex] = useState(0);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const hintTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const STAGES = STAGE_ICONS.map((icon, i) => ({ icon, label: t.processing.stages[i] }));
+  const LONG_WAIT_STAGE = STAGES.length - 1;
+  const hints = t.processing.longWaitHints;
 
   useEffect(() => {
     if (!id) return;
@@ -39,6 +43,19 @@ export default function Processing() {
       if (timer.current) clearInterval(timer.current);
     };
   }, [id, navigate, t]);
+
+  useEffect(() => {
+    if (stage !== LONG_WAIT_STAGE) {
+      setHintIndex(0);
+      return;
+    }
+    hintTimer.current = setInterval(() => {
+      setHintIndex((i) => (i + 1) % hints.length);
+    }, 2600);
+    return () => {
+      if (hintTimer.current) clearInterval(hintTimer.current);
+    };
+  }, [stage, LONG_WAIT_STAGE, hints.length]);
 
   async function retry() {
     if (!id) return;
@@ -83,6 +100,13 @@ export default function Processing() {
                 );
               })}
             </div>
+            {stage === LONG_WAIT_STAGE && (
+              <div className="mt-1 text-center h-5">
+                <span key={hintIndex} className="inline-block text-[13px] text-info" style={{ animation: 'pm-rise .4s ease both' }}>
+                  {hints[hintIndex]}
+                </span>
+              </div>
+            )}
             <div className="mt-7 flex items-center gap-2 justify-center text-[12.5px] text-text2">
               <ShieldCheck className="w-4 h-4 text-teal" />
               {t.processing.privacyNote}

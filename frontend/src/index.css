@@ -130,6 +130,117 @@
     transform: none;
   }
 }
+@keyframes pm-write {
+  0% {
+    transform: scaleX(0);
+    opacity: 0;
+  }
+  6% {
+    opacity: 1;
+  }
+  14% {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+  78% {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+  90% {
+    transform: scaleX(1);
+    opacity: 0;
+  }
+  100% {
+    transform: scaleX(0);
+    opacity: 0;
+  }
+}
+@keyframes pm-write-accent {
+  0% {
+    transform: scaleX(0);
+    opacity: 0;
+  }
+  6% {
+    opacity: 0.6;
+  }
+  14% {
+    transform: scaleX(1);
+    opacity: 0.6;
+  }
+  78% {
+    transform: scaleX(1);
+    opacity: 0.6;
+  }
+  90% {
+    transform: scaleX(1);
+    opacity: 0;
+  }
+  100% {
+    transform: scaleX(0);
+    opacity: 0;
+  }
+}
+@keyframes pm-blink {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes pm-tagpop {
+  0% {
+    transform: scale(0.85);
+    opacity: 0;
+  }
+  6% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  70% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  85% {
+    transform: scale(0.85);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(0.85);
+    opacity: 0;
+  }
+}
+@keyframes pm-msg-in {
+  0% {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  7% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  88% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  97%,
+  100% {
+    opacity: 0;
+    transform: translateY(0);
+  }
+}
+@keyframes pm-dot {
+  0%,
+  60%,
+  100% {
+    opacity: 0.35;
+    transform: translateY(0);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+}
 
 @media (prefers-reduced-motion: reduce) {
   * {

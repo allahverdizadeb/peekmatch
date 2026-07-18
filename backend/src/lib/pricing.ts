@@ -1,3 +1,5 @@
+import { prisma } from '../db.js';
+
 export type PackageId = 1 | 2 | 3;
 
 export const PACKAGES: Record<PackageId, { name: string; priceUsd: number }> = {
@@ -12,6 +14,19 @@ export function highestOwnedPackage(paidPackages: number[]): PackageId | 0 {
   if (paidPackages.includes(2)) return 2;
   if (paidPackages.includes(1)) return 1;
   return 0;
+}
+
+export async function ownedPackages(analysisId: string): Promise<number[]> {
+  const orders = await prisma.order.findMany({ where: { analysisId, status: 'paid' } });
+  return orders.map((o) => o.package);
+}
+
+/** Price to charge when upgrading from `owned` to `pkg` — the gap between tiers, computed in
+ * integer cents to avoid float artifacts (e.g. 5.90 - 0.99 in raw floats). */
+export function upgradePriceUsd(pkg: PackageId, owned: PackageId | 0): number {
+  const baseCents = Math.round(PACKAGES[pkg].priceUsd * 100);
+  const ownedCents = owned === 0 ? 0 : Math.round(PACKAGES[owned].priceUsd * 100);
+  return Math.max(0, baseCents - ownedCents) / 100;
 }
 
 export function unlocksReport(owned: number): boolean {
