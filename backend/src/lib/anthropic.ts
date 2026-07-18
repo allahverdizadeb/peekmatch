@@ -161,7 +161,7 @@ export type MatchResult = {
   improvementOpportunities: { title: string; impact: string }[];
 };
 
-const LANG_NAME: Record<string, string> = { az: 'Azərbaycan', en: 'English', ru: 'Русский' };
+const LANG_NAME: Record<string, string> = { az: 'Azərbaycan', en: 'English', tr: 'Türkçe', ru: 'Русский' };
 
 export async function analyzeMatch(
   cvText: string,

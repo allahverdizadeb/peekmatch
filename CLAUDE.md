@@ -10,6 +10,8 @@ All user-facing copy and AI output is in Azerbaijani (error messages, prompts, s
 
 There are two independent npm projects with no root package.json / workspace tooling: `backend/` and `frontend/`. Always `cd` into the relevant one before running npm commands.
 
+The site UI is localized into Azerbaijani, English, Turkish, and Russian via `frontend/src/lib/i18n/` (`LanguageContext` + per-locale `Dict`-typed files under `locales/`, `LanguageSwitcher` in both headers). `az.ts` is the structural source of truth — `en.ts`/`tr.ts`/`ru.ts` are typed as `: Dict` so `tsc -b` fails the build if a key is added to one locale and not the others. The CV-analysis form's separate "AI result language" picker (`outputLanguage`, sent to the backend) seeds from the current UI language on mount but is user-overridable and not re-synced afterward.
+
 ## Commands
 
 ```bash

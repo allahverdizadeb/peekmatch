@@ -1,7 +1,9 @@
 # PeekMatch
 AI-powered CV ↔ job vacancy compatibility analysis platform (Azerbaijani-market product, implemented from the Claude Design handoff in `project/` — see `chats/` for the original design conversation).
 
-This repo contains a working implementation of the **core user flow**: landing → CV/vacancy analysis → free results dashboard → pricing → checkout → payment → paid report / tailored CV / cover letter / interview prep. Admin panel, legal pages, delete/expired states, and EN/TR/RU UI chrome from the original design were intentionally left out of this pass — see `chats/chat1.md` and the design file for the full scope if you want to extend it.
+This repo contains a working implementation of the **core user flow**: landing → CV/vacancy analysis → free results dashboard → pricing → checkout → payment → paid report / tailored CV / cover letter / interview prep. Admin panel, legal pages, and delete/expired states from the original design were intentionally left out of this pass — see `chats/chat1.md` and the design file for the full scope if you want to extend it.
+
+The UI is fully localized into Azerbaijani, English, Turkish, and Russian via a header language switcher (`frontend/src/lib/i18n/`); the CV-analysis AI result language defaults to whatever site language is active but can be changed independently.
 
 ## Stack
 

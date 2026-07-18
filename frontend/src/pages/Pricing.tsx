@@ -4,62 +4,24 @@ import { Check, Info } from 'lucide-react';
 import { AppHeader } from '../components/AppHeader';
 import { Button, Badge, Card } from '../components/ui';
 import { getAnalysis, type AnalysisInfo } from '../lib/api';
+import { useLanguage } from '../lib/i18n/LanguageContext';
+import type { Dict } from '../lib/i18n/locales';
 
-const PACKAGES = [
-  {
-    id: 1,
-    name: 'Tam uyğunluq hesabatı',
-    price: '0.49 USD',
-    desc: 'CV və vakansiya arasındakı bütün uyğunluqları detallı görün.',
-    features: [
-      'Bütün əsas tələblərin analizi',
-      'Uyğun, qismən uyğun və uyğun olmayan tələblər',
-      'CV-dən tapılan sübutlar',
-      'Kritik boşluqlar',
-      'Detallı vizual statistika',
-      'PDF hesabat',
-    ],
-    cta: 'Hesabatı aç',
-  },
-  {
-    id: 2,
-    name: 'Vakansiyaya uyğun CV və cover letter',
-    price: '0.99 USD',
-    desc: 'Yuxarıdakı hər şey + uyğunlaşdırılmış CV və cover letter.',
-    features: [
-      'Yuxarıdakı paketin hamısı',
-      'Uyğunlaşdırılmış professional summary',
-      'Yenidən yazılmış iş təcrübəsi',
-      'Uyğunlaşdırılmış skills bölməsi',
-      'Tam CV və cover letter',
-      'Word və PDF faylları',
-    ],
-    cta: 'CV-mi uyğunlaşdır',
-    popular: true,
-  },
-  {
-    id: 3,
-    name: 'Tam müraciət və müsahibə paketi',
-    price: '5.90 USD',
-    desc: 'Yuxarıdakı hər şey + müsahibə hazırlığı.',
-    features: [
-      'Yuxarıdakı paketlərin hamısı',
-      'HR, situasiya və texniki suallar',
-      '"Tell me about yourself" cavabı',
-      'Güclü və zəif tərəflər üzrə hazırlıq',
-      'Kritik boşluqların izahı',
-      'Müsahibə hazırlığı PDF-i',
-    ],
-    cta: 'Tam paketi al',
-    premium: true,
-  },
-];
+function buildPackages(t: Dict) {
+  return [
+    { id: 1, ...t.pricing.packages['1'], price: '0.49 USD', popular: false, premium: false },
+    { id: 2, ...t.pricing.packages['2'], price: '0.99 USD', popular: true, premium: false },
+    { id: 3, ...t.pricing.packages['3'], price: '5.90 USD', popular: false, premium: true },
+  ];
+}
 
 export default function Pricing() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [params] = useSearchParams();
+  const { t } = useLanguage();
   const [info, setInfo] = useState<AnalysisInfo | null>(null);
+  const PACKAGES = buildPackages(t);
 
   useEffect(() => {
     if (id) getAnalysis(id).then(setInfo).catch(() => {});
@@ -73,17 +35,17 @@ export default function Pricing() {
       <AppHeader vacancyTitle={info?.vacancyTitle} vacancyCompany={info?.vacancyCompany} vacancyLocation={info?.vacancyLocation} />
       <div className="max-w-[1080px] mx-auto px-6 py-10">
         <div className="text-center max-w-[620px] mx-auto mb-9">
-          <h1 className="text-[28px] font-bold mb-2">Paketinizi seçin</h1>
-          <p className="text-[15px] text-text2">İlkin analiz həmişə pulsuzdur. Bütün paketlər birdəfəlik ödənişdir — abunəlik yoxdur.</p>
+          <h1 className="text-[28px] font-bold mb-2">{t.pricing.title}</h1>
+          <p className="text-[15px] text-text2">{t.pricing.subtitle}</p>
         </div>
 
         {notDone && (
           <div className="bg-info-bg border border-info rounded-rc p-4 mb-8 flex items-center justify-between flex-wrap gap-3">
             <span className="text-[14px] text-navy flex items-center gap-2">
               <Info className="w-4 h-4 text-info" />
-              Paket almaq üçün əvvəlcə pulsuz analiz edin.
+              {t.pricing.needFreeAnalysis}
             </span>
-            <Button size="sm" onClick={() => navigate('/analyze')}>Pulsuz analizə başla</Button>
+            <Button size="sm" onClick={() => navigate('/analyze')}>{t.pricing.startFreeAnalysis}</Button>
           </div>
         )}
 
@@ -104,8 +66,8 @@ export default function Pricing() {
                         : '')
                 }
               >
-                {p.popular && <Badge tone="success" className="mb-3 self-start">Ən populyar</Badge>}
-                {p.premium && <Badge tone="premium" className="mb-3 self-start">Premium</Badge>}
+                {p.popular && <Badge tone="success" className="mb-3 self-start">{t.pricing.mostPopular}</Badge>}
+                {p.premium && <Badge tone="premium" className="mb-3 self-start">{t.pricing.premiumBadge}</Badge>}
                 <h3 className="text-[17px] font-bold mb-1">{p.name}</h3>
                 <div className="text-[26px] font-extrabold text-navy mb-2">{p.price}</div>
                 <p className="text-[13.5px] text-text2 mb-4">{p.desc}</p>
@@ -118,7 +80,7 @@ export default function Pricing() {
                   ))}
                 </ul>
                 {owned ? (
-                  <Badge tone="success" className="justify-center py-2.5">Sahibsiniz ✓</Badge>
+                  <Badge tone="success" className="justify-center py-2.5">{t.pricing.ownedBadge}</Badge>
                 ) : (
                   <Button
                     variant={p.premium ? 'premium' : 'primary'}
@@ -132,7 +94,7 @@ export default function Pricing() {
             );
           })}
         </div>
-        <p className="text-center text-[12.5px] text-muted mt-6">Birdəfəlik ödəniş — abunəlik yoxdur.</p>
+        <p className="text-center text-[12.5px] text-muted mt-6">{t.pricing.footerNote}</p>
       </div>
     </div>
   );

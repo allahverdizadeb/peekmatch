@@ -4,22 +4,19 @@ import { Check, Upload, FileSearch, ListChecks, Target, BarChart3, Sparkles, Shi
 import { MarketingHeader, Footer } from '../components/MarketingChrome';
 import { Button } from '../components/ui';
 import { getStatus, startAnalysis } from '../lib/api';
+import { useLanguage } from '../lib/i18n/LanguageContext';
 
-const STAGES = [
-  { icon: Upload, label: 'CV yüklənir' },
-  { icon: FileSearch, label: 'CV məlumatları oxunur' },
-  { icon: ListChecks, label: 'Vakansiyanın əsas tələbləri müəyyən edilir' },
-  { icon: Target, label: 'CV-də uyğun sübutlar tapılır' },
-  { icon: BarChart3, label: 'Uyğunluq hesablanır' },
-  { icon: Sparkles, label: 'Nəticə hazırlanır' },
-];
+const STAGE_ICONS = [Upload, FileSearch, ListChecks, Target, BarChart3, Sparkles];
 
 export default function Processing() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { t } = useLanguage();
   const [stage, setStage] = useState(0);
   const [failed, setFailed] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const STAGES = STAGE_ICONS.map((icon, i) => ({ icon, label: t.processing.stages[i] }));
 
   useEffect(() => {
     if (!id) return;
@@ -32,7 +29,7 @@ export default function Processing() {
           setTimeout(() => navigate(`/results/${id}`), 400);
         } else if (s.status === 'failed') {
           if (timer.current) clearInterval(timer.current);
-          setFailed(s.failReason || 'Analiz tamamlanmadı.');
+          setFailed(s.failReason || t.processing.failedTitle);
         }
       } catch {
         // keep polling
@@ -41,7 +38,7 @@ export default function Processing() {
     return () => {
       if (timer.current) clearInterval(timer.current);
     };
-  }, [id, navigate]);
+  }, [id, navigate, t]);
 
   async function retry() {
     if (!id) return;
@@ -56,15 +53,15 @@ export default function Processing() {
       <div className="max-w-[640px] mx-auto px-6 py-16">
         {failed ? (
           <div className="bg-surface border border-border rounded-rl shadow-sh p-8 text-center">
-            <h1 className="text-[22px] font-bold mb-2">Analiz tamamlanmadı</h1>
-            <p className="text-[14.5px] text-text2 mb-6">Fayllarınız saxlanılıb. Analizi yenidən başlada bilərsiniz.</p>
-            <Button onClick={retry}>Yenidən cəhd et</Button>
+            <h1 className="text-[22px] font-bold mb-2">{t.processing.failedTitle}</h1>
+            <p className="text-[14.5px] text-text2 mb-6">{t.processing.failedSubtitle}</p>
+            <Button onClick={retry}>{t.processing.retry}</Button>
           </div>
         ) : (
           <div className="bg-surface border border-border rounded-rl shadow-sh p-8">
-            <h1 className="text-[24px] font-bold mb-1.5 text-center">CV və vakansiya analiz edilir</h1>
+            <h1 className="text-[24px] font-bold mb-1.5 text-center">{t.processing.title}</h1>
             <p className="text-[14.5px] text-text2 mb-8 text-center">
-              Bu proses sənədlərin ölçüsünə və vakansiyanın strukturuna görə dəyişə bilər.
+              {t.processing.subtitle}
             </p>
             <div className="grid gap-1">
               {STAGES.map((s, i) => {
@@ -88,11 +85,11 @@ export default function Processing() {
             </div>
             <div className="mt-7 flex items-center gap-2 justify-center text-[12.5px] text-text2">
               <ShieldCheck className="w-4 h-4 text-teal" />
-              Faylınız yalnız bu analiz üçün istifadə olunur.
+              {t.processing.privacyNote}
             </div>
             <div className="text-center mt-4">
               <button className="text-[13px] text-muted hover:text-danger" onClick={() => navigate('/')}>
-                Analizi dayandır
+                {t.processing.stopAnalysis}
               </button>
             </div>
           </div>

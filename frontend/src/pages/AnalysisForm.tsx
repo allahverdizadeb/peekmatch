@@ -12,6 +12,8 @@ import {
   startAnalysis,
   type VacancyPreview,
 } from '../lib/api';
+import { useLanguage } from '../lib/i18n/LanguageContext';
+import type { Lang } from '../lib/i18n/locales';
 
 const MIN_CV_TEXT = 2000;
 const MIN_VACANCY_TEXT = 3000;
@@ -27,6 +29,7 @@ const SAMPLE_VACANCY =
 
 export default function AnalysisForm() {
   const navigate = useNavigate();
+  const { t, lang: uiLang } = useLanguage();
   const fileInput = useRef<HTMLInputElement>(null);
 
   const [analysisId, setAnalysisId] = useState<string | null>(null);
@@ -49,7 +52,7 @@ export default function AnalysisForm() {
   const [manualText, setManualText] = useState('');
   const [manualSubmitted, setManualSubmitted] = useState(false);
 
-  const [outputLanguage, setOutputLanguage] = useState<'az' | 'en' | 'ru'>('az');
+  const [outputLanguage, setOutputLanguage] = useState<Lang>(uiLang);
   const [consent, setConsent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
@@ -60,11 +63,11 @@ export default function AnalysisForm() {
   async function handleFile(file: File) {
     setCvError('');
     if (!/\.(pdf|docx)$/i.test(file.name)) {
-      setCvError('Yalnız PDF və DOCX formatları dəstəklənir.');
+      setCvError(t.analysisForm.errUnsupportedType);
       return;
     }
     if (file.size > 10 * 1024 * 1024) {
-      setCvError('Faylın ölçüsü 10 MB-dan çox ola bilməz.');
+      setCvError(t.analysisForm.errFileTooLarge);
       return;
     }
     setCvUploading(true);
@@ -75,7 +78,7 @@ export default function AnalysisForm() {
       setCvSize(res.cvSize);
       setCvUploaded(true);
     } catch (err: any) {
-      setCvError(err.message || 'Fayl yüklənərkən xəta baş verdi.');
+      setCvError(err.message || t.analysisForm.errFileUploadGeneric);
     } finally {
       setCvUploading(false);
     }
@@ -91,7 +94,7 @@ export default function AnalysisForm() {
       setCvSize(res.cvSize);
       setCvUploaded(true);
     } catch (err: any) {
-      setCvError(err.message || 'CV mətni qəbul edilmədi.');
+      setCvError(err.message || t.analysisForm.errCvTextRejected);
     } finally {
       setCvUploading(false);
     }
@@ -132,12 +135,12 @@ export default function AnalysisForm() {
         setManualMode(false);
       } else {
         setVacancyStatus('failed');
-        setVacancyFailReason(res.reason || 'Linkdən vakansiya mətni alınmadı.');
+        setVacancyFailReason(res.reason || t.analysisForm.errVacancyGeneric);
         setManualMode(true);
       }
     } catch (err: any) {
       setVacancyStatus('failed');
-      setVacancyFailReason(err.message || 'Vakansiya səhifəsi avtomatik oxuna bilmədi.');
+      setVacancyFailReason(err.message || t.analysisForm.errVacancyAutoFail);
       setManualMode(true);
     } finally {
       setVacancyChecking(false);
@@ -163,7 +166,7 @@ export default function AnalysisForm() {
       await startAnalysis(analysisId);
       navigate(`/processing/${analysisId}`);
     } catch (err: any) {
-      setSubmitError(err.message || 'Analiz başladılarkən xəta baş verdi.');
+      setSubmitError(err.message || t.analysisForm.errSubmitGeneric);
       setSubmitting(false);
     }
   }
@@ -173,12 +176,12 @@ export default function AnalysisForm() {
       <MarketingHeader />
       <div className="max-w-[760px] mx-auto px-6 py-12">
         <div className="bg-surface border border-border rounded-rl shadow-sh p-7 md:p-9">
-          <h1 className="text-[24px] font-bold mb-1.5">CV-nizi vakansiya ilə müqayisə edin</h1>
-          <p className="text-[15px] text-text2 mb-8">Qeydiyyat olmadan pulsuz ilkin nəticə əldə edin.</p>
+          <h1 className="text-[24px] font-bold mb-1.5">{t.analysisForm.title}</h1>
+          <p className="text-[15px] text-text2 mb-8">{t.analysisForm.subtitle}</p>
 
           {/* Step 1: CV */}
           <div className="mb-8">
-            <label className="block text-[15px] font-semibold mb-3">1. CV-nizi yükləyin</label>
+            <label className="block text-[15px] font-semibold mb-3">{t.analysisForm.step1Label}</label>
             {!cvUploaded && (
               <div className="flex gap-1.5 mb-3">
                 {(['file', 'text'] as const).map((m) => (
@@ -191,7 +194,7 @@ export default function AnalysisForm() {
                     }
                   >
                     {m === 'file' ? <Upload className="w-3.5 h-3.5" /> : <FileText className="w-3.5 h-3.5" />}
-                    {m === 'file' ? 'Fayl yüklə' : 'Mətn kimi daxil et'}
+                    {m === 'file' ? t.analysisForm.modeFile : t.analysisForm.modeText}
                   </button>
                 ))}
               </div>
@@ -204,11 +207,11 @@ export default function AnalysisForm() {
                   <div className="text-[14px] font-semibold truncate">{cvName}</div>
                   <div className="text-[12px] text-text2 flex items-center gap-1.5">
                     <Check className="w-3.5 h-3.5 text-success" />
-                    {cvSize} · Uğurla yükləndi
+                    {cvSize} · {t.analysisForm.uploadedSuccess}
                   </div>
                 </div>
                 <button onClick={resetCv} className="text-[13px] font-semibold text-teal hover:text-teal-h flex-none">
-                  Dəyişdir
+                  {t.common.change}
                 </button>
               </div>
             ) : cvMode === 'file' ? (
@@ -227,15 +230,15 @@ export default function AnalysisForm() {
                 {cvUploading ? (
                   <div className="flex flex-col items-center gap-2 text-text2">
                     <Loader2 className="w-6 h-6 animate-spin text-teal" />
-                    <span className="text-[14px]">Yüklənir...</span>
+                    <span className="text-[14px]">{t.common.loading}</span>
                   </div>
                 ) : (
                   <>
                     <Upload className="w-7 h-7 text-teal mx-auto mb-3" />
-                    <p className="text-[15px] font-medium mb-1">PDF və ya DOCX faylını buraya sürükləyin</p>
-                    <p className="text-[13.5px] text-text2 mb-4">və ya kompüterinizdən seçin</p>
+                    <p className="text-[15px] font-medium mb-1">{t.analysisForm.dropTitle}</p>
+                    <p className="text-[13.5px] text-text2 mb-4">{t.analysisForm.dropSubtitle}</p>
                     <Button variant="secondary" size="sm" onClick={() => fileInput.current?.click()}>
-                      Fayl seç
+                      {t.analysisForm.chooseFile}
                     </Button>
                     <input
                       ref={fileInput}
@@ -247,7 +250,7 @@ export default function AnalysisForm() {
                     <div className="flex justify-center gap-2 mt-4 text-[11px] text-muted">
                       <span className="px-2 py-0.5 rounded-full bg-bg2">PDF</span>
                       <span className="px-2 py-0.5 rounded-full bg-bg2">DOCX</span>
-                      <span>Maksimum fayl ölçüsü: 10 MB</span>
+                      <span>{t.analysisForm.maxFileSize}</span>
                     </div>
                   </>
                 )}
@@ -257,20 +260,20 @@ export default function AnalysisForm() {
                 <textarea
                   value={cvText}
                   onChange={(e) => setCvText(e.target.value)}
-                  placeholder="CV mətninizi buraya yerləşdirin — təcrübə, bacarıqlar, təhsil..."
+                  placeholder={t.analysisForm.textPlaceholder}
                   className="w-full min-h-[160px] border border-border rounded-rk p-3 text-[14px] resize-y focus-ring"
                 />
                 <div className="flex justify-between items-center flex-wrap gap-2 mt-1.5">
                   <span className={'text-[12px] font-semibold ' + (cvText.length >= MIN_CV_TEXT ? 'text-success' : 'text-muted')}>
-                    Minimum {MIN_CV_TEXT} simvol · {cvText.length} / {MIN_CV_TEXT}
+                    {t.analysisForm.minCharsPrefix} {MIN_CV_TEXT} {t.analysisForm.minCharsUnit} · {cvText.length} / {MIN_CV_TEXT}
                   </span>
                   {cvText.length >= MIN_CV_TEXT ? (
                     <Button size="sm" loading={cvUploading} onClick={submitCvText}>
-                      CV mətnini təsdiqlə
+                      {t.analysisForm.submitCvText}
                     </Button>
                   ) : (
                     <button className="text-[12px] font-semibold text-teal" onClick={() => setCvText(SAMPLE_CV)}>
-                      Nümunə mətni doldur
+                      {t.analysisForm.fillSample}
                     </button>
                   )}
                 </div>
@@ -281,7 +284,7 @@ export default function AnalysisForm() {
 
           {/* Step 2: vacancy */}
           <div className="mb-8">
-            <label className="block text-[15px] font-semibold mb-3">2. Vakansiyanın linkini əlavə edin</label>
+            <label className="block text-[15px] font-semibold mb-3">{t.analysisForm.step2Label}</label>
             {vacancyStatus === 'success' && vacancyPreview ? (
               <div className="border border-border rounded-rk p-4 bg-bg">
                 <div className="flex items-start gap-3">
@@ -291,7 +294,7 @@ export default function AnalysisForm() {
                     <div className="text-[12.5px] text-text2 truncate">
                       {vacancyPreview.company} {vacancyPreview.location ? `· ${vacancyPreview.location}` : ''} · {vacancyPreview.domain}
                     </div>
-                    <span className="inline-block mt-1.5 text-[11px] font-semibold text-success">Vakansiya tapıldı</span>
+                    <span className="inline-block mt-1.5 text-[11px] font-semibold text-success">{t.analysisForm.vacancyFound}</span>
                   </div>
                   <button
                     className="text-[13px] font-semibold text-teal flex-none"
@@ -301,7 +304,7 @@ export default function AnalysisForm() {
                     }}
                     disabled={!analysisId}
                   >
-                    Dəyişdir
+                    {t.common.change}
                   </button>
                 </div>
               </div>
@@ -311,19 +314,19 @@ export default function AnalysisForm() {
                   <input
                     value={vacancyUrl}
                     onChange={(e) => setVacancyUrl(e.target.value)}
-                    placeholder="https://..."
+                    placeholder={t.analysisForm.vacancyUrlPlaceholder}
                     disabled={!analysisId}
                     className="flex-1 min-w-0 border border-border rounded-rk px-3.5 py-2.5 text-[14px] focus-ring disabled:bg-bg2"
                   />
                   <Button size="sm" loading={vacancyChecking} disabled={!analysisId || !vacancyUrl} onClick={checkVacancy} className="sm:flex-none">
                     <LinkIcon className="w-4 h-4" />
-                    Vakansiyanı yoxla
+                    {t.analysisForm.checkVacancy}
                   </Button>
                 </div>
                 <p className="text-[13px] text-text2 mt-1.5">
-                  {analysisId ? 'İstənilən açıq vakansiya səhifəsinin linkini yerləşdirin.' : 'Əvvəlcə CV-nizi yükləyin.'}
+                  {analysisId ? t.analysisForm.vacancyHintReady : t.analysisForm.vacancyHintNotReady}
                 </p>
-                {vacancyChecking && <p className="text-[13px] text-teal mt-1">Vakansiya məlumatları oxunur...</p>}
+                {vacancyChecking && <p className="text-[13px] text-teal mt-1">{t.analysisForm.vacancyChecking}</p>}
               </>
             )}
 
@@ -332,28 +335,28 @@ export default function AnalysisForm() {
                 <div className="flex items-start gap-2.5 mb-3">
                   <AlertTriangle className="w-5 h-5 text-warning flex-none mt-0.5" />
                   <div>
-                    <div className="text-[14.5px] font-semibold">Linkdən vakansiya mətni alınmadı</div>
+                    <div className="text-[14.5px] font-semibold">{t.analysisForm.vacancyFailTitle}</div>
                     <p className="text-[13px] text-text2 mt-0.5">
-                      {vacancyFailReason || 'Bəzi saytlar avtomatik oxunmanı məhdudlaşdırır.'} Vakansiyanın mətnini aşağıdakı sahəyə əlavə edin.
+                      {vacancyFailReason || t.analysisForm.vacancyFailFallbackSite} {t.analysisForm.vacancyFailInstruction}
                     </p>
                   </div>
                 </div>
-                <label className="block text-[13px] font-semibold mb-1.5">Vakansiyanın mətnini daxil edin</label>
+                <label className="block text-[13px] font-semibold mb-1.5">{t.analysisForm.manualLabel}</label>
                 <textarea
                   value={manualText}
                   onChange={(e) => setManualText(e.target.value)}
-                  placeholder="Vakansiyanın vəzifələr və tələblər hissəsini buraya yerləşdirin..."
+                  placeholder={t.analysisForm.manualPlaceholder}
                   className="w-full min-h-[140px] border border-border rounded-rk p-3 text-[14px] resize-y focus-ring bg-white"
                 />
                 <div className="flex justify-between items-center flex-wrap gap-2 mt-1.5">
                   <span className={'text-[12px] font-semibold ' + (manualText.length >= MIN_VACANCY_TEXT ? 'text-success' : 'text-muted')}>
-                    Minimum {MIN_VACANCY_TEXT} simvol · {manualText.length} / {MIN_VACANCY_TEXT}
+                    {t.analysisForm.minCharsPrefix} {MIN_VACANCY_TEXT} {t.analysisForm.minCharsUnit} · {manualText.length} / {MIN_VACANCY_TEXT}
                   </span>
                   {manualText.length >= MIN_VACANCY_TEXT ? (
-                    <Button size="sm" onClick={submitManualVacancy}>Vakansiya mətnini təsdiqlə</Button>
+                    <Button size="sm" onClick={submitManualVacancy}>{t.analysisForm.submitManual}</Button>
                   ) : (
                     <button className="text-[12px] font-semibold text-teal" onClick={() => setManualText(SAMPLE_VACANCY)}>
-                      Nümunə mətni doldur
+                      {t.analysisForm.fillSample}
                     </button>
                   )}
                 </div>
@@ -363,7 +366,7 @@ export default function AnalysisForm() {
             {manualSubmitted && (
               <div className="mt-4 flex items-center gap-2.5 border border-border rounded-rk p-4 bg-bg">
                 <Check className="w-5 h-5 text-success flex-none" />
-                <span className="text-[14px] font-medium">Vakansiya mətn kimi daxil edilib</span>
+                <span className="text-[14px] font-medium">{t.analysisForm.manualSubmittedText}</span>
                 <button
                   className="ml-auto text-[13px] font-semibold text-teal"
                   onClick={() => {
@@ -371,7 +374,7 @@ export default function AnalysisForm() {
                     setVacancyStatus('idle');
                   }}
                 >
-                  Dəyişdir
+                  {t.common.change}
                 </button>
               </div>
             )}
@@ -379,15 +382,9 @@ export default function AnalysisForm() {
 
           {/* Step 3: language */}
           <div className="mb-8">
-            <label className="block text-[15px] font-semibold mb-3">3. Nəticə dilini seçin</label>
+            <label className="block text-[15px] font-semibold mb-3">{t.analysisForm.step3Label}</label>
             <div className="flex gap-2">
-              {(
-                [
-                  ['az', 'Azərbaycan dili'],
-                  ['en', 'English'],
-                  ['ru', 'Русский'],
-                ] as const
-              ).map(([code, label]) => (
+              {(['az', 'en', 'tr', 'ru'] as const).map((code) => (
                 <button
                   key={code}
                   onClick={() => setOutputLanguage(code)}
@@ -396,7 +393,7 @@ export default function AnalysisForm() {
                     (outputLanguage === code ? 'border-teal bg-success-bg text-teal' : 'border-border text-text2 bg-white')
                   }
                 >
-                  {label}
+                  {t.analysisForm.languagePills[code]}
                 </button>
               ))}
             </div>
@@ -411,17 +408,17 @@ export default function AnalysisForm() {
               className="mt-1 w-4 h-4 accent-teal"
             />
             <span className="text-[13.5px] text-text2 leading-relaxed">
-              Mən CV məlumatlarımın analiz üçün emal edilməsinə və müəyyən edilmiş müddətdən sonra avtomatik silinməsinə razıyam.
+              {t.analysisForm.consentText}
             </span>
           </label>
 
           {submitError && <p className="text-[13.5px] text-danger mb-3">{submitError}</p>}
 
           <Button className="w-full" size="md" disabled={!canSubmit} loading={submitting} onClick={handleSubmit}>
-            Uyğunluğu analiz et
+            {t.analysisForm.submitCta}
           </Button>
           <p className="text-center text-[12.5px] text-muted mt-2.5">
-            {canSubmit ? 'İlkin analiz pulsuzdur.' : 'Davam etmək üçün CV və vakansiya məlumatlarını tamamlayın.'}
+            {canSubmit ? t.analysisForm.submitHintReady : t.analysisForm.submitHintNotReady}
           </p>
         </div>
       </div>

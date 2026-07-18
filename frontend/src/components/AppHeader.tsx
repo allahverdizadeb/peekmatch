@@ -1,6 +1,8 @@
 import { useNavigate } from 'react-router-dom';
 import { Logo } from './Logo';
 import { Button } from './ui';
+import { LanguageSwitcher } from './LanguageSwitcher';
+import { useLanguage } from '../lib/i18n/LanguageContext';
 
 export function AppHeader({
   vacancyTitle,
@@ -14,6 +16,7 @@ export function AppHeader({
   timestamp?: string;
 }) {
   const navigate = useNavigate();
+  const { t } = useLanguage();
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-border">
       <div className="max-w-[1320px] mx-auto px-6 h-[68px] flex items-center gap-6">
@@ -31,8 +34,9 @@ export function AppHeader({
           </div>
         )}
         <div className="ml-auto flex items-center gap-3">
+          <LanguageSwitcher />
           <Button size="sm" variant="secondary" onClick={() => navigate('/analyze')}>
-            Yeni analiz
+            {t.header.newAnalysis}
           </Button>
         </div>
       </div>
