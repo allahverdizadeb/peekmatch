@@ -42,15 +42,34 @@ model Analysis {
   failReason  String?
 
   // AI result (free + paid derived content), stored as JSON
-  resultJson         String? // matching analysis result
-  reportJson          String? // paid: full requirement matrix + weak presentation + improvement opportunities
-  tailoredCvJson      String? // paid tier 2+: tailored CV content
-  coverLetterJson     String? // paid tier 2+: cover letter content
-  interviewPrepJson   String? // paid tier 3: interview prep content
+  resultJson         String? // matching analysis result (incl. cvPresentationScore)
+  reportJson          String? // unused — /report is derived directly from resultJson, see analyses.ts
+  cvChangePlanJson    String? // CV Change Plan (evidence-based rewrite/add/clarify/remove cards) — generated eagerly for every analysis, full list gated by unlocksApplication
+  interviewPrepJson   String? // paid: Interview Playbook content
+
+  // Interview Playbook generation job status — persisted (not just in-memory) so it survives a
+  // server restart and so "processing" vs "failed" is a real, queryable fact rather than inferred
+  // from an HTTP response. idle -> processing -> done | failed. A failed job can be retried, which
+  // flips it back to processing; interviewPrepJson (above) is the actual result, set only on done.
+  interviewPrepStatus     String  @default("idle") // idle | processing | done | failed
+  interviewPrepFailReason String?
 
   // Lifecycle
   deletedAt                DateTime? // set by user-triggered delete; content fields nulled at the same time
   selfAttestedGapConfirmed Boolean?  // user's yes/no answer to "do you actually have this experience?" for mostImportantMissingRequirement
+  selfAttestedGapDetails   String?   // free-text elaboration captured when the answer is "yes"
+
+  // @deprecated — Cover Letter feature removed (product update). No longer read/written by any
+  // application code; kept as-is rather than dropped to avoid a destructive migration on rows that
+  // may still hold generated content (they self-expire within 24h regardless via the existing
+  // retention cron, so this is safe to actually drop in a later cleanup pass once confirmed unused).
+  coverLetterJson String?
+
+  // @deprecated — CV Recheck feature removed (product update). Same non-destructive rationale as
+  // coverLetterJson above: no longer read/written anywhere, left in place rather than dropped.
+  recheckCvText     String?
+  recheckResultJson String?
+  recheckCount      Int     @default(0)
 
   orders Order[]
 
@@ -64,13 +83,29 @@ model Order {
   analysisId String
   analysis   Analysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
 
-  package   Int // 1 = report, 2 = tailored CV + cover letter, 3 = interview package
+  package   Int // 1 = Application Package (CV Change Plan + Evidence Chain), 2 = Interview Ready Package (adds Interview Playbook)
   amountUsd Float
   status    String @default("pending") // pending | processing | paid | failed
 
   @@index([analysisId])
 }
 
+// Minimal first-party product-analytics event log (no CV/document content, only ids/counts/booleans).
+model Event {
+  id         String   @id @default(uuid())
+  createdAt  DateTime @default(now())
+  name       String
+  analysisId String?
+  metadata   String? // JSON-encoded, small fixed key allowlist per event — see routes/events.ts
+
+  @@index([name])
+}
+
+// @deprecated-write-path — the public "Təklif ver" submission widget was removed from the product
+// (POST /api/suggestions no longer exists), so no new rows are created. Kept, not dropped, because
+// GET /api/suggestions (admin-only) still reads existing rows for the admin panel and doubles as
+// AdminGate's key-validation check; a future controlled migration can drop this table once the
+// admin panel itself is retired.
 model Suggestion {
   id        String   @id @default(uuid())
   createdAt DateTime @default(now())

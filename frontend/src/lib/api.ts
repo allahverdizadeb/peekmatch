@@ -84,14 +84,19 @@ export function deleteAnalysis(id: string) {
   return req<{ ok: true }>(`/analyses/${id}`, { method: 'DELETE' });
 }
 
-export function submitSelfAttest(id: string, confirmed: boolean) {
-  return req<{ ok: true }>(`/analyses/${id}/self-attest`, { method: 'PATCH', body: JSON.stringify({ confirmed }) });
+export interface CvChangesSummary {
+  critical: number;
+  important: number;
+  optional: number;
 }
 
 export interface FreeResult {
   vacancy: { title: string; company: string; location: string };
   compatibility: number;
   compatibilityLabel: string;
+  /** Independent quality axis from `compatibility` — how well the CV's writing sells the real experience. */
+  cvPresentationScore: number;
+  cvPresentationLabel: string;
   /** Candidate's true underlying fit if experience were fully reflected in the CV — always >= compatibility. */
   realCompatibility: number;
   mainRequirementsTotal: number;
@@ -110,6 +115,14 @@ export interface FreeResult {
   recommendationTone: 'positive' | 'warning' | 'negative';
   recommendationReasons: string[];
   recommendationNextAction: string;
+  /** Real, app-computed counts for the premium-conversion preview — never hardcoded. */
+  cvChangesSummary: CvChangesSummary;
+  interviewRisksCount: number;
+  /** One fully-populated CV Change Plan card, unlocked for free as a concrete example. */
+  exampleCard: CvChangeCard | null;
+  /** False while the CV Change Plan is still generating in the background (cvChangesSummary/
+   * exampleCard are zeroed/null until then) — poll again shortly rather than treating as final. */
+  cvChangePlanReady: boolean;
   ownedPackage: number;
   selfAttestedGapConfirmed: boolean | null;
 }
@@ -130,6 +143,7 @@ export interface RequirementRow {
 export interface FullReport {
   vacancy: { title: string; company: string; location: string };
   compatibility: number;
+  cvPresentationScore: number;
   realCompatibility: number;
   realCompatibilityGap: string;
   mainRequirementsTotal: number;
@@ -148,47 +162,100 @@ export function getReport(id: string) {
   return req<FullReport>(`/analyses/${id}/report`);
 }
 
-export interface TailoredCv {
-  name: string;
+// ---------- CV Change Plan (replaces the old "Tailored CV") ----------
+
+export type ChangeType = 'rewrite' | 'add' | 'clarify' | 'remove';
+
+export interface CvChangeCard {
+  section: string;
+  currentText: string;
+  /** One short sentence: what to change (e.g. "Bu mətni daha konkret yazın."). */
+  whatToChange: string;
+  /** One short sentence: why it matters for this vacancy. */
+  problem: string;
+  recommendedText: string;
+  relatedRequirements: string[];
+  evidenceFromCv: string[];
+  priority: 'kritik' | 'əsas' | 'üstünlük';
+  changeType: ChangeType;
+}
+
+export function getCvChangePlan(id: string) {
+  return req<{ cards: CvChangeCard[]; ownedPackage: number }>(`/analyses/${id}/cv-plan`);
+}
+
+// ---------- Interview Playbook ----------
+
+export interface InterviewQuestion {
+  question: string;
+  why: string;
+  answerFramework: string;
+  priority: 'veryLikely' | 'likely' | 'additional';
+  relatedRequirement: string;
+  relevantExperience: string;
+  likelyFollowUps: string[];
+}
+
+export interface CriticalGapStrategy {
+  requirement: string;
+  situation: 'has_experience' | 'similar_experience' | 'no_experience';
+  guidance: string;
+}
+
+export interface StarStory {
   title: string;
-  contact: string;
-  summary: string;
-  skills: string[];
-  experience: { role: string; dates: string; bullets: string[] }[];
-  education: string;
-  certifications: string;
-  languages: string;
-  changeExplanations: string[];
-}
-
-export function getTailoredCv(id: string) {
-  return req<{ cv: TailoredCv; ownedPackage: number }>(`/analyses/${id}/cv`);
-}
-
-export interface CoverLetter {
-  greeting: string;
-  body: string[];
-  closing: string;
-  basedOn: string[];
-}
-
-export function getCoverLetter(id: string) {
-  return req<{ letter: CoverLetter; ownedPackage: number }>(`/analyses/${id}/cover-letter`);
+  situation: string;
+  task: string;
+  action: string;
+  result: string;
+  missingDetail: string;
 }
 
 export interface InterviewPrep {
   strongestTopic: string;
   biggestRisk: string;
+  /** The "60-second introduction" framework. */
   tellMeAboutYourself: string;
-  hrQuestions: { question: string; why: string; answerFramework: string }[];
-  situational: { question: string; why: string; answerFramework: string }[];
-  technical: { question: string; why: string; answerFramework: string }[];
+  hrQuestions: InterviewQuestion[];
+  situational: InterviewQuestion[];
+  technical: InterviewQuestion[];
+  criticalGapStrategies: CriticalGapStrategy[];
+  starStories: StarStory[];
+  cvVerificationQuestions: string[];
   gapExplanations: string[];
   questionsToAsk: string[];
 }
 
-export function getInterviewPrep(id: string) {
-  return req<{ prep: InterviewPrep; ownedPackage: number }>(`/analyses/${id}/interview`);
+export type InterviewPrepStatus = 'idle' | 'processing' | 'done' | 'failed';
+
+/** Starts generation if not already running/done — idempotent, safe to call on every mount and on
+ * retry; the backend atomically ensures only one real job runs per analysis. Returns immediately. */
+export function startInterviewPrep(id: string, signal?: AbortSignal) {
+  return req<{ status: InterviewPrepStatus }>(`/analyses/${id}/interview/generate`, { method: 'POST', signal });
+}
+
+export function getInterviewPrepStatus(id: string, signal?: AbortSignal) {
+  return req<{ status: InterviewPrepStatus; failReason: string | null }>(`/analyses/${id}/interview/status`, { signal });
+}
+
+export function getInterviewPrep(id: string, signal?: AbortSignal) {
+  return req<{ prep: InterviewPrep; ownedPackage: number }>(`/analyses/${id}/interview`, { signal });
+}
+
+// ---------- Evidence Chain ----------
+
+export interface EvidenceChainLink {
+  requirement: string;
+  category: string;
+  importance: 'kritik' | 'əsas' | 'üstünlük';
+  status: 'met' | 'partial' | 'missing' | 'insufficient_info';
+  evidence: string;
+  relatedChangeSection: string | null;
+  relatedInterviewQuestion: string | null;
+}
+
+export function getEvidenceChain(id: string) {
+  return req<{ chain: EvidenceChainLink[] }>(`/analyses/${id}/evidence-chain`);
 }
 
 // ---------- orders ----------
@@ -215,12 +282,8 @@ export function simulatePayment(id: string, outcome: 'success' | 'fail') {
   return req<{ status: string }>(`/orders/${id}/simulate`, { method: 'POST', body: JSON.stringify({ outcome }) });
 }
 
-// ---------- suggestions (public submit; admin read lives in lib/adminApi.ts) ----------
+// ---------- suggestions (admin read only — public submission widget was removed; see lib/adminApi.ts) ----------
 
 export type SuggestionCategory = 'Funksionallıq' | 'Dizayn' | 'Qiymət' | 'Digər';
-
-export function submitSuggestion(category: SuggestionCategory, text: string, email: string) {
-  return req<{ ok: true }>('/suggestions', { method: 'POST', body: JSON.stringify({ category, text, email }) });
-}
 
 export { req as apiRequest };

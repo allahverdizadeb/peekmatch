@@ -1,17 +1,16 @@
-import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Check, Shield, Trash2, Upload, Link as LinkIcon, Target, BarChart3, ScanLine, AlertTriangle, Minus, Lock, Sparkles, ChevronDown, Clock, FileText, X } from 'lucide-react';
+import { Check, Shield, Trash2, Upload, Link as LinkIcon, Target, BarChart3, ScanLine, AlertTriangle, Minus, Lock, Sparkles, Clock, FileText, X } from 'lucide-react';
 import { MarketingHeader, Footer } from '../components/MarketingChrome';
 import { Button, Badge, SectionLabel } from '../components/ui';
 import { RadialGauge } from '../components/charts';
+import { Accordion } from '../components/Accordion';
 import { useLanguage } from '../lib/i18n/LanguageContext';
 import type { Dict } from '../lib/i18n/locales';
 
 function buildPackages(t: Dict) {
   return [
-    { id: 1, ...t.pricing.packages['1'], price: '0.49', popular: false, premium: false },
-    { id: 2, ...t.pricing.packages['2'], price: '0.99', popular: true, premium: false },
-    { id: 3, ...t.pricing.packages['3'], price: '5.90', popular: false, premium: true },
+    { id: 1, ...t.pricing.packages['1'], price: '0.90', popular: false },
+    { id: 2, ...t.pricing.packages['2'], price: '2.90', popular: true },
   ];
 }
 
@@ -19,7 +18,6 @@ export default function Landing() {
   const navigate = useNavigate();
   const { t } = useLanguage();
   const PACKAGES = buildPackages(t);
-  const [faqOpen, setFaqOpen] = useState(-1);
 
   return (
     <div>
@@ -32,7 +30,7 @@ export default function Landing() {
             <span className="w-1.5 h-1.5 rounded-full bg-success" />
             {t.landing.badge}
           </div>
-          <h1 className="text-[38px] md:text-[46px] leading-[1.12] font-bold tracking-tight mb-4">
+          <h1 className="font-display font-semibold text-[38px] md:text-[48px] leading-[1.1] tracking-tight mb-4">
             {t.landing.heroTitle}
           </h1>
           <p className="text-[18px] leading-relaxed text-text2 mb-7 max-w-[520px]">
@@ -73,7 +71,7 @@ export default function Landing() {
             <div className="flex items-center gap-2 text-[13px] mb-1.5 text-warning"><Minus className="w-4 h-4" />{t.landing.vacancyItem3}</div>
             <div className="flex items-center gap-2 text-[13px] text-danger"><X className="w-4 h-4" />{t.landing.vacancyItem4}</div>
           </div>
-          <div className="absolute left-10 bottom-0 z-30 bg-navy rounded-rc shadow-sh-lg px-5 py-4 w-[190px]">
+          <div className="absolute left-10 bottom-0 z-30 bg-ink rounded-rc shadow-sh-xl px-5 py-4 w-[200px]">
             <div className="flex items-center gap-3">
               <svg width="44" height="44" className="-rotate-90 flex-none">
                 <circle cx="22" cy="22" r="18" fill="none" stroke="rgba(255,255,255,0.14)" strokeWidth="5" />
@@ -89,9 +87,14 @@ export default function Landing() {
                 />
               </svg>
               <div>
-                <div className="text-[22px] font-extrabold text-white leading-none">71%</div>
+                <div className="font-display font-semibold text-[22px] text-white leading-none tabular-nums">71%</div>
                 <div className="text-[11px] text-[#9fb0c3] mt-1">{t.landing.exampleGaugeUnit}</div>
               </div>
+            </div>
+            <div className="flex h-1.5 rounded-full overflow-hidden mt-3" aria-hidden="true">
+              <div className="bg-success" style={{ width: '70%' }} />
+              <div className="bg-warning" style={{ width: '10%' }} />
+              <div className="bg-danger" style={{ width: '20%' }} />
             </div>
             <div className="flex items-center gap-1.5 mt-3 pt-3 border-t border-white/10 text-[12px] text-warning">
               <span className="w-1.5 h-1.5 rounded-full bg-warning flex-none" />
@@ -106,7 +109,7 @@ export default function Landing() {
         <div className="max-w-[1200px] mx-auto px-6 py-16">
           <div className="text-center max-w-[620px] mx-auto mb-10">
             <SectionLabel>{t.landing.howItWorksLabel}</SectionLabel>
-            <h2 className="text-[30px] md:text-[34px] font-bold tracking-tight">{t.landing.howItWorksTitle}</h2>
+            <h2 className="font-display font-semibold text-[30px] md:text-[34px] tracking-tight">{t.landing.howItWorksTitle}</h2>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {[
@@ -224,7 +227,7 @@ export default function Landing() {
       {/* Differentiation */}
       <section className="max-w-[1200px] mx-auto px-6 py-20">
         <div className="max-w-[760px] mx-auto mb-11 text-center">
-          <h2 className="text-[30px] md:text-[34px] font-bold tracking-tight leading-tight mb-3.5">
+          <h2 className="font-display font-semibold text-[30px] md:text-[34px] tracking-tight leading-tight mb-3.5">
             {t.landing.diffTitle}
           </h2>
           <p className="text-[19px] leading-relaxed text-text2">{t.landing.diffSubtitle}</p>
@@ -280,7 +283,7 @@ export default function Landing() {
         <div className="max-w-[1200px] mx-auto px-6 py-16">
           <div className="flex items-center gap-3 justify-center mb-9">
             <span className="px-3 py-1.5 bg-navy text-white rounded-full text-[12px] font-bold tracking-wide">{t.landing.exampleBadge}</span>
-            <h2 className="text-[26px] md:text-[30px] font-bold tracking-tight">{t.landing.exampleTitle}</h2>
+            <h2 className="font-display font-semibold text-[26px] md:text-[30px] tracking-tight">{t.landing.exampleTitle}</h2>
           </div>
           <div className="bg-surface border border-border rounded-rl shadow-sh max-w-[1000px] mx-auto overflow-hidden">
             <div className="flex items-start justify-between gap-4 flex-wrap p-7 border-b border-border">
@@ -292,8 +295,9 @@ export default function Landing() {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-[auto_1fr] gap-8 items-center p-7">
               <div className="text-center">
-                <RadialGauge value={71} label={t.landing.exampleGaugeUnit} />
-                <div className="text-teal font-semibold text-[15px] mt-2">{t.landing.gaugeLabel}</div>
+                <RadialGauge value={71} />
+                <div className="text-[12px] text-text2 mt-2">{t.landing.exampleGaugeUnit}</div>
+                <div className="text-teal font-semibold text-[15px]">{t.landing.gaugeLabel}</div>
               </div>
               <div className="grid gap-3.5">
                 <div className="flex items-start gap-3 bg-success-bg rounded-rc p-4">
@@ -330,10 +334,10 @@ export default function Landing() {
       <section id="sec-pricing" className="max-w-[1200px] mx-auto px-6 py-20">
         <div className="text-center max-w-[620px] mx-auto mb-11">
           <SectionLabel>{t.landing.pricingLabel}</SectionLabel>
-          <h2 className="text-[30px] md:text-[34px] font-bold tracking-tight mb-3">{t.landing.pricingTitle}</h2>
+          <h2 className="font-display font-semibold text-[30px] md:text-[34px] tracking-tight mb-3">{t.landing.pricingTitle}</h2>
           <p className="text-[16px] text-text2">{t.landing.pricingSubtitle}</p>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 items-stretch">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 items-stretch">
           <div className="relative rounded-rl p-6 flex flex-col bg-white border-[1.5px] border-dashed border-teal">
             <h3 className="text-[17px] font-bold mb-1">{t.pricing.freeTier.name}</h3>
             <p className="text-[13.5px] text-text2 mb-4">{t.pricing.freeTier.desc}</p>
@@ -354,21 +358,12 @@ export default function Landing() {
               key={p.id}
               className={
                 'relative rounded-rl p-6 flex flex-col border ' +
-                (p.premium
-                  ? 'bg-premium-bg border-premium'
-                  : p.popular
-                    ? 'bg-white border-teal border-[1.5px] shadow-sh'
-                    : 'bg-white border-border')
+                (p.popular ? 'bg-white border-teal border-[1.5px] shadow-sh' : 'bg-white border-border')
               }
             >
               {p.popular && (
                 <span className="absolute -top-3 left-1/2 -translate-x-1/2 px-3.5 py-1 rounded-full text-[12px] font-bold text-white bg-teal whitespace-nowrap">
                   {t.pricing.mostPopular}
-                </span>
-              )}
-              {p.premium && (
-                <span className="absolute -top-3 left-1/2 -translate-x-1/2 px-3.5 py-1 rounded-full text-[12px] font-bold text-white bg-premium whitespace-nowrap">
-                  {t.pricing.premiumBadge}
                 </span>
               )}
               <h3 className="text-[17px] font-bold mb-1">{p.name}</h3>
@@ -378,14 +373,14 @@ export default function Landing() {
                 <span className="text-[14px] font-semibold text-muted">USD</span>
               </div>
               <ul className="grid gap-2 mb-6 flex-1">
-                {p.features.slice(0, 3).map((f) => (
+                {p.features.slice(0, 3).map((f: string) => (
                   <li key={f} className="text-[13.5px] text-text2 flex gap-2 items-start">
                     <Check className="w-4 h-4 text-teal flex-none mt-0.5" />
                     {f}
                   </li>
                 ))}
               </ul>
-              <Button variant={p.premium ? 'premium' : p.popular ? 'primary' : 'secondary'} onClick={() => navigate('/analyze')}>
+              <Button variant={p.popular ? 'primary' : 'secondary'} onClick={() => navigate('/analyze')}>
                 {t.landing.selectCta}
               </Button>
             </div>
@@ -405,7 +400,7 @@ export default function Landing() {
             <div className="inline-flex w-11 h-11 rounded-xl bg-teal/20 text-[#4fd6c9] items-center justify-center mb-5">
               <Shield className="w-6 h-6" />
             </div>
-            <h2 className="text-[28px] md:text-[32px] font-bold tracking-tight mb-4">{t.landing.privacyTitle}</h2>
+            <h2 className="font-display font-semibold text-[28px] md:text-[32px] tracking-tight mb-4">{t.landing.privacyTitle}</h2>
             <p className="text-[16px] leading-relaxed text-[#b9c7d4] max-w-[440px] mb-6">
               {t.landing.privacySubtitle}
             </p>
@@ -436,25 +431,9 @@ export default function Landing() {
       <section className="max-w-[820px] mx-auto px-6 py-20">
         <div className="text-center mb-10">
           <SectionLabel>{t.landing.faqLabel}</SectionLabel>
-          <h2 className="text-[30px] md:text-[34px] font-bold tracking-tight">{t.landing.faqTitle}</h2>
+          <h2 className="font-display font-semibold text-[30px] md:text-[34px] tracking-tight">{t.landing.faqTitle}</h2>
         </div>
-        <div className="grid gap-3">
-          {t.landing.faq.map((item, i) => {
-            const open = faqOpen === i;
-            return (
-              <div key={i} className="bg-surface border border-border rounded-rc overflow-hidden">
-                <button
-                  className="w-full flex items-center justify-between gap-3 px-5 py-4 text-left"
-                  onClick={() => setFaqOpen(open ? -1 : i)}
-                >
-                  <span className="text-[15px] font-semibold">{item.q}</span>
-                  <ChevronDown className={'w-4 h-4 text-teal flex-none transition-transform ' + (open ? 'rotate-180' : '')} />
-                </button>
-                {open && <p className="px-5 pb-4 text-[14px] leading-relaxed text-text2">{item.a}</p>}
-              </div>
-            );
-          })}
-        </div>
+        <Accordion items={t.landing.faq.map((item, i) => ({ key: String(i), title: item.q, content: item.a }))} />
       </section>
 
       <Footer />

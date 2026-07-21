@@ -11,7 +11,6 @@ import PaymentStatus from './pages/PaymentStatus';
 import Workspace from './pages/Workspace';
 import Admin from './pages/Admin';
 import AdminInsights from './pages/AdminInsights';
-import { FeedbackWidget } from './components/FeedbackWidget';
 import { RouteErrorBoundary } from './components/RouteErrorBoundary';
 
 const LegalPage = lazy(() => import('./pages/LegalPage'));
@@ -40,23 +39,20 @@ function LegalRoute({ docKey }: { docKey: 'privacy' | 'terms' | 'deletion' }) {
 
 export default function App() {
   return (
-    <>
-      <Routes>
-        <Route path="/" element={<Landing />} />
-        <Route path="/analyze" element={<AnalysisForm />} />
-        <Route path="/processing/:id" element={<Processing />} />
-        <Route path="/results/:id" element={<Results />} />
-        <Route path="/pricing/:id" element={<Pricing />} />
-        <Route path="/checkout/:id/:pkg" element={<Checkout />} />
-        <Route path="/payment/:orderId" element={<PaymentStatus />} />
-        <Route path="/workspace/:id/:tab" element={<Workspace />} />
-        <Route path="/privacy" element={<LegalRoute docKey="privacy" />} />
-        <Route path="/terms" element={<LegalRoute docKey="terms" />} />
-        <Route path="/deletion" element={<LegalRoute docKey="deletion" />} />
-        <Route path="/admin" element={<Admin />} />
-        <Route path="/admin/insights" element={<AdminInsights />} />
-      </Routes>
-      <FeedbackWidget />
-    </>
+    <Routes>
+      <Route path="/" element={<Landing />} />
+      <Route path="/analyze" element={<AnalysisForm />} />
+      <Route path="/processing/:id" element={<Processing />} />
+      <Route path="/results/:id" element={<Results />} />
+      <Route path="/pricing/:id" element={<Pricing />} />
+      <Route path="/checkout/:id/:pkg" element={<Checkout />} />
+      <Route path="/payment/:orderId" element={<PaymentStatus />} />
+      <Route path="/workspace/:id/:tab" element={<Workspace />} />
+      <Route path="/privacy" element={<LegalRoute docKey="privacy" />} />
+      <Route path="/terms" element={<LegalRoute docKey="terms" />} />
+      <Route path="/deletion" element={<LegalRoute docKey="deletion" />} />
+      <Route path="/admin" element={<Admin />} />
+      <Route path="/admin/insights" element={<AdminInsights />} />
+    </Routes>
   );
 }

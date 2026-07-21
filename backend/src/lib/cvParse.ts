@@ -1,7 +1,7 @@
 import mammoth from 'mammoth';
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { createCanvas } from '@napi-rs/canvas';
-import { ocrDocumentImages } from './anthropic.js';
+import { ocrDocumentImages } from './ai.js';
 
 export const MAX_CV_BYTES = 10 * 1024 * 1024; // 10 MB
 export const MIN_CV_TEXT_CHARS = 2000; // pasted CV text minimum
@@ -54,7 +54,7 @@ async function renderPageToPng(page: any): Promise<string> {
 }
 
 /** Best-effort vision-OCR fallback for image-only PDF pages. Returns '' (never throws) when
- * unavailable (no ANTHROPIC_API_KEY) or when OCR itself fails — the caller's existing "not enough
+ * unavailable (no OPENAI_API_KEY) or when OCR itself fails — the caller's existing "not enough
  * text" rejection is the correct behavior in that case, not a 500. */
 async function tryOcrFallback(doc: any): Promise<string> {
   try {

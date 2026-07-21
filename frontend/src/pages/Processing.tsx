@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Check, Upload, FileSearch, ListChecks, Target, BarChart3, Sparkles, ShieldCheck } from 'lucide-react';
+import { Upload, FileSearch, ListChecks, Target, BarChart3, Sparkles, ShieldCheck } from 'lucide-react';
 import { MarketingHeader, Footer } from '../components/MarketingChrome';
 import { Button } from '../components/ui';
+import { VerticalStepper } from '../components/Stepper';
 import { getStatus, startAnalysis } from '../lib/api';
 import { useLanguage } from '../lib/i18n/LanguageContext';
 
@@ -76,30 +77,17 @@ export default function Processing() {
           </div>
         ) : (
           <div className="bg-surface border border-border rounded-rl shadow-sh p-8">
-            <h1 className="text-[24px] font-bold mb-1.5 text-center">{t.processing.title}</h1>
-            <p className="text-[14.5px] text-text2 mb-8 text-center">
+            <h1 className="font-display font-semibold text-[24px] mb-1.5 text-center">{t.processing.title}</h1>
+            <p className="text-[14.5px] text-text2 mb-6 text-center">
               {t.processing.subtitle}
             </p>
-            <div className="grid gap-1">
-              {STAGES.map((s, i) => {
-                const idx = i + 1;
-                const done = stage > idx || (stage === 6 && idx <= 6);
-                const current = stage === idx;
-                return (
-                  <div key={s.label} className="flex items-center gap-3.5 py-2.5">
-                    <span
-                      className={
-                        'w-8 h-8 rounded-full flex items-center justify-center flex-none border ' +
-                        (done ? 'bg-success text-white border-success' : current ? 'bg-info-bg text-info border-info animate-pulse' : 'bg-bg2 text-muted border-border')
-                      }
-                    >
-                      {done ? <Check className="w-4 h-4" /> : <s.icon className="w-4 h-4" />}
-                    </span>
-                    <span className={'text-[14.5px] ' + (done || current ? 'text-navy font-medium' : 'text-muted')}>{s.label}</span>
-                  </div>
-                );
-              })}
+            <div className="h-1.5 w-full rounded-full bg-bg2 overflow-hidden mb-6" role="img" aria-label={`${Math.round((Math.min(stage, 6) / 6) * 100)}%`}>
+              <div
+                className="h-full rounded-full bg-teal"
+                style={{ width: `${(Math.min(stage, 6) / 6) * 100}%`, transition: 'width .4s ease' }}
+              />
             </div>
+            <VerticalStepper steps={STAGES.map((s) => ({ key: s.label, label: s.label, icon: s.icon }))} activeIndex={stage - 1} allDone={stage >= 6} />
             {stage === LONG_WAIT_STAGE && (
               <div className="mt-1 text-center h-5">
                 <span key={hintIndex} className="inline-block text-[13px] text-info" style={{ animation: 'pm-rise .4s ease both' }}>

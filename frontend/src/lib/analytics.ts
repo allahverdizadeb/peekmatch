@@ -1,0 +1,18 @@
+import { apiRequest } from './api';
+
+// First-party, minimal event log (see backend/src/routes/events.ts) — not a real analytics vendor.
+// Fire-and-forget: tracking must never block or break the action it's attached to, and the backend
+// only accepts a small fixed allowlist of event names/metadata keys, so nothing sensitive (CV text,
+// documents) can ever be sent through this even by mistake.
+export type AnalyticsEvent =
+  | { name: 'package_selected'; metadata: { package: number } }
+  | { name: 'checkout_started'; metadata: { package: number; isUpgrade: boolean } }
+  | { name: 'payment_completed'; metadata: { package: number } }
+  | { name: 'cv_change_copied'; metadata: { changeType: string; priority: string } };
+
+export function track(event: AnalyticsEvent, analysisId?: string): void {
+  apiRequest('/events', {
+    method: 'POST',
+    body: JSON.stringify({ name: event.name, analysisId, metadata: event.metadata }),
+  }).catch(() => {});
+}

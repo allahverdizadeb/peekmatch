@@ -1,5 +1,6 @@
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import clsx from 'clsx';
+import { CheckCircle2, AlertTriangle, OctagonAlert, Info, Sparkles, Circle } from 'lucide-react';
 
 type Variant = 'primary' | 'secondary' | 'tertiary' | 'danger' | 'premium';
 type Size = 'md' | 'sm';
@@ -66,11 +67,78 @@ const BADGE_CLS: Record<BadgeTone, string> = {
   neutral: 'bg-bg2 text-text2',
 };
 
-export function Badge({ tone = 'neutral', children, className }: { tone?: BadgeTone; children: ReactNode; className?: string }) {
+// Every status badge pairs an icon with its color by default — status must never be communicated
+// by color alone (accessibility requirement: colorblind users, low-vision users). Pass `icon={null}`
+// explicitly to opt out for the rare purely-decorative badge.
+const BADGE_ICON: Record<BadgeTone, typeof CheckCircle2> = {
+  success: CheckCircle2,
+  warning: AlertTriangle,
+  danger: OctagonAlert,
+  info: Info,
+  premium: Sparkles,
+  neutral: Circle,
+};
+
+export function Badge({
+  tone = 'neutral',
+  children,
+  className,
+  icon,
+}: {
+  tone?: BadgeTone;
+  children: ReactNode;
+  className?: string;
+  /** Override the default per-tone icon, or pass `null` to omit it entirely. */
+  icon?: typeof CheckCircle2 | null;
+}) {
+  const Icon = icon === undefined ? BADGE_ICON[tone] : icon;
   return (
     <span className={clsx('inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[12.5px] font-bold', BADGE_CLS[tone], className)}>
+      {Icon && <Icon className="w-3.5 h-3.5 flex-none" aria-hidden="true" />}
       {children}
     </span>
+  );
+}
+
+/** Standardized "big number + label" metric display — replaces the ad-hoc
+ * `<div className="text-[26px] font-extrabold">` patterns previously scattered across
+ * Results.tsx/Workspace.tsx, so every metric in the product shares one visual language
+ * (tabular numerals, consistent scale, optional sub-label for context). */
+export function MetricCard({
+  value,
+  label,
+  subLabel,
+  icon: Icon,
+  tone = 'neutral',
+  size = 'md',
+  className,
+}: {
+  value: ReactNode;
+  label: ReactNode;
+  subLabel?: ReactNode;
+  icon?: typeof CheckCircle2;
+  tone?: 'neutral' | 'success' | 'warning' | 'danger' | 'accent';
+  size?: 'md' | 'lg';
+  className?: string;
+}) {
+  const toneCls: Record<string, string> = {
+    neutral: 'text-navy',
+    success: 'text-success',
+    warning: 'text-warning',
+    danger: 'text-danger',
+    accent: 'text-accent',
+  };
+  return (
+    <div className={clsx('min-w-0', className)}>
+      <div className="flex items-center gap-2 text-[12.5px] font-semibold text-text2 mb-1.5">
+        {Icon && <Icon className="w-3.5 h-3.5 flex-none" aria-hidden="true" />}
+        <span className="truncate">{label}</span>
+      </div>
+      <div className={clsx('font-display font-semibold tabular-nums leading-none', toneCls[tone], size === 'lg' ? 'text-[34px]' : 'text-[26px]')}>
+        {value}
+      </div>
+      {subLabel && <div className="text-[12px] text-muted mt-1.5">{subLabel}</div>}
+    </div>
   );
 }
 

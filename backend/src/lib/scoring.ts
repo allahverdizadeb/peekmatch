@@ -80,9 +80,9 @@ interface ScorableResult {
 }
 
 /** Applies every deterministic-scoring product rule to a freshly-parsed AI analysis result, in
- * place, and returns it. Defined structurally (not against anthropic.ts's MatchResult type) so it
+ * place, and returns it. Defined structurally (not against ai.ts's MatchResult type) so it
  * has zero dependency on that module and can be unit-tested directly with plain object fixtures —
- * anthropic.ts's actual MatchResult satisfies this shape and can be passed in as-is.
+ * ai.ts's actual MatchResult satisfies this shape and can be passed in as-is.
  *
  * Order matters: the evidence-downgrade must run before the score computations, so a correction
  * (a 'met' claim with no evidence isn't a confirmed match) actually changes the score, rather than
@@ -99,3 +99,76 @@ export function applyScoringOverrides<T extends ScorableResult>(result: T): T {
   result.realCompatibility = Math.max(result.realCompatibility, result.compatibility);
   return result;
 }
+
+// ---------- CV Change Plan (Truth Lock enforcement + free-tier summary counts) ----------
+
+export type ChangeType = 'rewrite' | 'add' | 'clarify' | 'remove';
+
+interface ScorableCvChangeCard {
+  priority: Importance;
+  changeType: ChangeType;
+  evidenceFromCv: string[];
+  whatToChange: string;
+  problem: string;
+  recommendedText: string;
+}
+
+// Concise-by-design limits for the CV Change Plan cards (product brief: "problem explanation:
+// maximum 1 sentence; reason: maximum 1 sentence; recommended text: maximum 60-90 words"). The
+// prompt in ai.ts already asks for this, but nothing in JSON-schema output enforces sentence count
+// or word count — this is the same "enforce in application code, not just prompt" pattern already
+// used for Truth Lock evidence-checking below. A small buffer over the target keeps normal
+// on-target output untouched while still catching a model that ignores the limit.
+const WHAT_TO_CHANGE_MAX_CHARS = 130;
+const PROBLEM_MAX_CHARS = 175;
+const RECOMMENDED_TEXT_MAX_WORDS = 100;
+const EVIDENCE_MAX_CHARS = 90;
+
+function truncateChars(text: string, maxChars: number): string {
+  const t = (text ?? '').trim();
+  return t.length <= maxChars ? t : t.slice(0, maxChars - 1).trimEnd() + '…';
+}
+
+function truncateWords(text: string, maxWords: number): string {
+  const t = (text ?? '').trim();
+  const words = t.split(/\s+/).filter(Boolean);
+  return words.length <= maxWords ? t : words.slice(0, maxWords).join(' ') + '…';
+}
+
+/** Truth Lock enforcement in application code, not just a prompt promise: a card that claims a
+ * concrete rewrite/add/remove but cites zero CV evidence is exactly the fabrication risk Truth
+ * Lock exists to prevent, so it's dropped here rather than shown to the user. 'clarify' cards are
+ * exempt — citing no evidence is the whole point of asking the candidate to confirm something.
+ * Also enforces the concise-card length limits (see constants above) by safely truncating any
+ * field a model over-generates, rather than displaying unbounded text. */
+export function sanitizeCvChangePlan<T extends ScorableCvChangeCard>(cards: T[]): T[] {
+  return cards
+    .filter((c) => c.changeType === 'clarify' || c.evidenceFromCv.some((e) => e?.trim()))
+    .map((c) => ({
+      ...c,
+      whatToChange: truncateChars(c.whatToChange, WHAT_TO_CHANGE_MAX_CHARS),
+      problem: truncateChars(c.problem, PROBLEM_MAX_CHARS),
+      recommendedText: truncateWords(c.recommendedText, RECOMMENDED_TEXT_MAX_WORDS),
+      evidenceFromCv: c.evidenceFromCv.map((e) => truncateChars(e, EVIDENCE_MAX_CHARS)),
+    }));
+}
+
+/** Counts by priority for the free-tier premium-conversion preview — computed from the actual
+ * (sanitized) plan, never hardcoded. */
+export function computeCvChangesSummary(cards: { priority: Importance }[]): { critical: number; important: number; optional: number } {
+  return {
+    critical: cards.filter((c) => c.priority === 'kritik').length,
+    important: cards.filter((c) => c.priority === 'əsas').length,
+    optional: cards.filter((c) => c.priority === 'üstünlük').length,
+  };
+}
+
+/** A broader signal than computeCriticalGapsCount (which only counts kritik gaps): any kritik OR
+ * əsas requirement not fully met is a plausible interview risk — something an interviewer is
+ * likely to probe. Deliberately not the same number as criticalGapsCount, which the free result
+ * already shows separately; this is what powers the free-tier "N interview risks identified"
+ * teaser without generating the (purchase-gated) Interview Playbook itself. */
+export function computeInterviewRisksCount(requirements: { importance: Importance; status: ReqStatus }[]): number {
+  return requirements.filter((r) => (r.importance === 'kritik' || r.importance === 'əsas') && r.status !== 'met').length;
+}
+

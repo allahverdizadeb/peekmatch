@@ -1,14 +1,14 @@
 import 'dotenv/config';
 import { app } from './app.js';
 import { prisma } from './db.js';
-import { aiConfigured } from './lib/anthropic.js';
+import { aiConfigured } from './lib/ai.js';
 
 const PORT = Number(process.env.PORT) || 4000;
 
 app.listen(PORT, () => {
   console.log(`PeekMatch backend listening on :${PORT}`);
   if (!aiConfigured()) {
-    console.warn('[startup] ANTHROPIC_API_KEY not set — matching analysis will use the offline fallback analyzer.');
+    console.warn('[startup] OPENAI_API_KEY not set — matching analysis will use the offline fallback analyzer.');
   }
 });
 

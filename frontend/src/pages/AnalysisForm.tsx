@@ -1,8 +1,9 @@
 import { useCallback, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Upload, FileText, Check, Link as LinkIcon, AlertTriangle, Loader2 } from 'lucide-react';
+import { Upload, FileText, Check, Link as LinkIcon, AlertTriangle, Loader2, Type } from 'lucide-react';
 import { MarketingHeader, Footer } from '../components/MarketingChrome';
 import { Button } from '../components/ui';
+import { Stepper } from '../components/Stepper';
 import {
   createAnalysisFromFile,
   createAnalysisFromText,
@@ -48,17 +49,30 @@ export default function AnalysisForm() {
   const [vacancyStatus, setVacancyStatus] = useState<'idle' | 'success' | 'failed'>('idle');
   const [vacancyPreview, setVacancyPreview] = useState<VacancyPreview | null>(null);
   const [vacancyFailReason, setVacancyFailReason] = useState('');
-  const [manualMode, setManualMode] = useState(false);
+  const [vacancyTab, setVacancyTab] = useState<'url' | 'manual'>('url');
   const [manualText, setManualText] = useState('');
   const [manualSubmitted, setManualSubmitted] = useState(false);
 
-  const [outputLanguage, setOutputLanguage] = useState<Lang>(uiLang);
+  // Tracks the user's own pick, if any. While they haven't touched the pill row, the effective
+  // language below follows the site's UI language live — fixes the bug where switching the site
+  // language after landing on /analyze (but before submitting) left the AI result language frozen
+  // on whatever it was when the page first mounted.
+  const [outputLanguageOverride, setOutputLanguageOverride] = useState<Lang | null>(null);
+  const outputLanguage = outputLanguageOverride ?? uiLang;
   const [consent, setConsent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
 
-  const vacancyReady = vacancyStatus === 'success' || (manualMode && manualSubmitted);
+  const vacancyReady = vacancyStatus === 'success' || manualSubmitted;
   const canSubmit = cvUploaded && vacancyReady && consent && !submitting;
+
+  const STEPPER_STEPS = [
+    { key: 'cv', label: t.analysisForm.stepperCv },
+    { key: 'vacancy', label: t.analysisForm.stepperVacancy },
+    { key: 'language', label: t.analysisForm.stepperLanguage },
+    { key: 'consent', label: t.analysisForm.stepperConsent },
+  ];
+  const stepperActiveIndex = !cvUploaded ? 0 : !vacancyReady ? 1 : !consent ? 3 : 4;
 
   async function handleFile(file: File) {
     setCvError('');
@@ -108,7 +122,7 @@ export default function AnalysisForm() {
     setAnalysisId(null);
     setVacancyStatus('idle');
     setVacancyPreview(null);
-    setManualMode(false);
+    setVacancyTab('url');
     setManualSubmitted(false);
   }
 
@@ -132,16 +146,13 @@ export default function AnalysisForm() {
       if (res.status === 'success' && res.vacancy) {
         setVacancyPreview(res.vacancy);
         setVacancyStatus('success');
-        setManualMode(false);
       } else {
         setVacancyStatus('failed');
         setVacancyFailReason(res.reason || t.analysisForm.errVacancyGeneric);
-        setManualMode(true);
       }
     } catch (err: any) {
       setVacancyStatus('failed');
       setVacancyFailReason(err.message || t.analysisForm.errVacancyAutoFail);
-      setManualMode(true);
     } finally {
       setVacancyChecking(false);
     }
@@ -175,8 +186,11 @@ export default function AnalysisForm() {
     <div>
       <MarketingHeader />
       <div className="max-w-[760px] mx-auto px-6 py-12">
+        <div className="mb-7">
+          <Stepper steps={STEPPER_STEPS} activeIndex={stepperActiveIndex} />
+        </div>
         <div className="bg-surface border border-border rounded-rl shadow-sh p-7 md:p-9">
-          <h1 className="text-[24px] font-bold mb-1.5">{t.analysisForm.title}</h1>
+          <h1 className="font-display font-semibold text-[26px] mb-1.5">{t.analysisForm.title}</h1>
           <p className="text-[15px] text-text2 mb-8">{t.analysisForm.subtitle}</p>
 
           {/* Step 1: CV */}
@@ -234,7 +248,9 @@ export default function AnalysisForm() {
                   </div>
                 ) : (
                   <>
-                    <Upload className="w-7 h-7 text-teal mx-auto mb-3" />
+                    <span className="w-12 h-12 rounded-full bg-success-bg flex items-center justify-center mx-auto mb-3">
+                      <Upload className="w-6 h-6 text-teal" aria-hidden="true" />
+                    </span>
                     <p className="text-[15px] font-medium mb-1">{t.analysisForm.dropTitle}</p>
                     <p className="text-[13.5px] text-text2 mb-4">{t.analysisForm.dropSubtitle}</p>
                     <Button variant="secondary" size="sm" onClick={() => fileInput.current?.click()}>
@@ -308,63 +324,8 @@ export default function AnalysisForm() {
                   </button>
                 </div>
               </div>
-            ) : (
-              <>
-                <div className="flex flex-col sm:flex-row gap-2">
-                  <input
-                    value={vacancyUrl}
-                    onChange={(e) => setVacancyUrl(e.target.value)}
-                    placeholder={t.analysisForm.vacancyUrlPlaceholder}
-                    disabled={!analysisId}
-                    className="flex-1 min-w-0 border border-border rounded-rk px-3.5 py-2.5 text-[14px] focus-ring disabled:bg-bg2"
-                  />
-                  <Button size="sm" loading={vacancyChecking} disabled={!analysisId || !vacancyUrl} onClick={checkVacancy} className="sm:flex-none">
-                    <LinkIcon className="w-4 h-4" />
-                    {t.analysisForm.checkVacancy}
-                  </Button>
-                </div>
-                <p className="text-[13px] text-text2 mt-1.5">
-                  {analysisId ? t.analysisForm.vacancyHintReady : t.analysisForm.vacancyHintNotReady}
-                </p>
-                {vacancyChecking && <p className="text-[13px] text-teal mt-1">{t.analysisForm.vacancyChecking}</p>}
-              </>
-            )}
-
-            {vacancyStatus === 'failed' && !manualSubmitted && (
-              <div className="mt-4 border border-border rounded-rc p-4 bg-warning-bg">
-                <div className="flex items-start gap-2.5 mb-3">
-                  <AlertTriangle className="w-5 h-5 text-warning flex-none mt-0.5" />
-                  <div>
-                    <div className="text-[14.5px] font-semibold">{t.analysisForm.vacancyFailTitle}</div>
-                    <p className="text-[13px] text-text2 mt-0.5">
-                      {vacancyFailReason || t.analysisForm.vacancyFailFallbackSite} {t.analysisForm.vacancyFailInstruction}
-                    </p>
-                  </div>
-                </div>
-                <label className="block text-[13px] font-semibold mb-1.5">{t.analysisForm.manualLabel}</label>
-                <textarea
-                  value={manualText}
-                  onChange={(e) => setManualText(e.target.value)}
-                  placeholder={t.analysisForm.manualPlaceholder}
-                  className="w-full min-h-[140px] border border-border rounded-rk p-3 text-[14px] resize-y focus-ring bg-white"
-                />
-                <div className="flex justify-between items-center flex-wrap gap-2 mt-1.5">
-                  <span className={'text-[12px] font-semibold ' + (manualText.length >= MIN_VACANCY_TEXT ? 'text-success' : 'text-muted')}>
-                    {t.analysisForm.minCharsPrefix} {MIN_VACANCY_TEXT} {t.analysisForm.minCharsUnit} · {manualText.length} / {MIN_VACANCY_TEXT}
-                  </span>
-                  {manualText.length >= MIN_VACANCY_TEXT ? (
-                    <Button size="sm" onClick={submitManualVacancy}>{t.analysisForm.submitManual}</Button>
-                  ) : (
-                    <button className="text-[12px] font-semibold text-teal" onClick={() => setManualText(SAMPLE_VACANCY)}>
-                      {t.analysisForm.fillSample}
-                    </button>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {manualSubmitted && (
-              <div className="mt-4 flex items-center gap-2.5 border border-border rounded-rk p-4 bg-bg">
+            ) : manualSubmitted ? (
+              <div className="flex items-center gap-2.5 border border-border rounded-rk p-4 bg-bg">
                 <Check className="w-5 h-5 text-success flex-none" />
                 <span className="text-[14px] font-medium">{t.analysisForm.manualSubmittedText}</span>
                 <button
@@ -377,6 +338,88 @@ export default function AnalysisForm() {
                   {t.common.change}
                 </button>
               </div>
+            ) : (
+              <>
+                <div className="flex gap-1.5 mb-3">
+                  {(['url', 'manual'] as const).map((tab) => (
+                    <button
+                      key={tab}
+                      onClick={() => setVacancyTab(tab)}
+                      className={
+                        'flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[13px] font-semibold border focus-ring ' +
+                        (vacancyTab === tab ? 'border-teal bg-success-bg text-teal' : 'border-border text-text2 bg-white')
+                      }
+                    >
+                      {tab === 'url' ? <LinkIcon className="w-3.5 h-3.5" /> : <Type className="w-3.5 h-3.5" />}
+                      {tab === 'url' ? t.analysisForm.vacancyTabUrl : t.analysisForm.vacancyTabManual}
+                    </button>
+                  ))}
+                </div>
+
+                {vacancyTab === 'url' ? (
+                  <>
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <input
+                        value={vacancyUrl}
+                        onChange={(e) => setVacancyUrl(e.target.value)}
+                        placeholder={t.analysisForm.vacancyUrlPlaceholder}
+                        disabled={!analysisId}
+                        className="flex-1 min-w-0 border border-border rounded-rk px-3.5 py-2.5 text-[14px] focus-ring disabled:bg-bg2"
+                      />
+                      <Button size="sm" loading={vacancyChecking} disabled={!analysisId || !vacancyUrl} onClick={checkVacancy} className="sm:flex-none">
+                        <LinkIcon className="w-4 h-4" />
+                        {t.analysisForm.checkVacancy}
+                      </Button>
+                    </div>
+                    <p className="text-[13px] text-text2 mt-1.5">
+                      {analysisId ? t.analysisForm.vacancyHintReady : t.analysisForm.vacancyHintNotReady}
+                    </p>
+                    {vacancyChecking && <p className="text-[13px] text-teal mt-1">{t.analysisForm.vacancyChecking}</p>}
+
+                    {vacancyStatus === 'failed' && (
+                      <div className="mt-4 border border-border rounded-rc p-4 bg-warning-bg">
+                        <div className="flex items-start gap-2.5">
+                          <AlertTriangle className="w-5 h-5 text-warning flex-none mt-0.5" />
+                          <div className="min-w-0">
+                            <div className="text-[14.5px] font-semibold">{t.analysisForm.vacancyFailTitle}</div>
+                            <p className="text-[13px] text-text2 mt-0.5">
+                              {vacancyFailReason || t.analysisForm.vacancyFailFallbackSite} {t.analysisForm.vacancyFailInstruction}
+                            </p>
+                            <button
+                              className="text-[13px] font-semibold text-teal mt-2 inline-flex items-center gap-1"
+                              onClick={() => setVacancyTab('manual')}
+                            >
+                              <Type className="w-3.5 h-3.5" />
+                              {t.analysisForm.vacancyTabManual} →
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div>
+                    <textarea
+                      value={manualText}
+                      onChange={(e) => setManualText(e.target.value)}
+                      placeholder={t.analysisForm.manualPlaceholder}
+                      className="w-full min-h-[140px] border border-border rounded-rk p-3 text-[14px] resize-y focus-ring"
+                    />
+                    <div className="flex justify-between items-center flex-wrap gap-2 mt-1.5">
+                      <span className={'text-[12px] font-semibold ' + (manualText.length >= MIN_VACANCY_TEXT ? 'text-success' : 'text-muted')}>
+                        {t.analysisForm.minCharsPrefix} {MIN_VACANCY_TEXT} {t.analysisForm.minCharsUnit} · {manualText.length} / {MIN_VACANCY_TEXT}
+                      </span>
+                      {manualText.length >= MIN_VACANCY_TEXT ? (
+                        <Button size="sm" onClick={submitManualVacancy}>{t.analysisForm.submitManual}</Button>
+                      ) : (
+                        <button className="text-[12px] font-semibold text-teal" onClick={() => setManualText(SAMPLE_VACANCY)}>
+                          {t.analysisForm.fillSample}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
 
@@ -387,7 +430,7 @@ export default function AnalysisForm() {
               {(['az', 'en'] as const).map((code) => (
                 <button
                   key={code}
-                  onClick={() => setOutputLanguage(code)}
+                  onClick={() => setOutputLanguageOverride(code)}
                   className={
                     'px-3.5 py-2 rounded-full text-[13.5px] font-semibold border focus-ring ' +
                     (outputLanguage === code ? 'border-teal bg-success-bg text-teal' : 'border-border text-text2 bg-white')

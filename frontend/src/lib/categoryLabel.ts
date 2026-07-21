@@ -22,24 +22,33 @@ const CATEGORY_NAMES: Record<Lang, Record<CategoryKey, string>> = {
   en: {
     experience: 'Work Experience',
     technical: 'Technical Skills',
-    tools: 'Software & Tools',
+    tools: 'Software and Tools',
     sector: 'Industry Experience',
     education: 'Education',
-    languages: 'Languages',
-    management: 'Management & Collaboration',
+    languages: 'Language Skills',
+    management: 'Management and Collaboration',
   },
 };
+
+// The English side isn't a fixed schema enum — the AI free-translates the Azerbaijani category
+// concepts into English, so exact phrasing can vary between calls (confirmed live: "Software and
+// Tools" vs. an earlier "Software & Tools" guess in this dictionary silently failed to match and
+// fell through untranslated). Normalizing "&"/"and" and collapsing whitespace before comparing
+// makes the lookup resilient to that variance instead of requiring byte-identical strings.
+function normalize(s: string): string {
+  return s.trim().toLowerCase().replace(/&/g, 'and').replace(/\s+/g, ' ');
+}
 
 const REVERSE_LOOKUP: Record<string, CategoryKey> = {};
 for (const lang of Object.keys(CATEGORY_NAMES) as Lang[]) {
   for (const key of CATEGORY_KEYS) {
-    REVERSE_LOOKUP[CATEGORY_NAMES[lang][key].trim().toLowerCase()] = key;
+    REVERSE_LOOKUP[normalize(CATEGORY_NAMES[lang][key])] = key;
   }
 }
 
 /** Returns `raw` re-rendered in `lang` if it matches one of the 7 known categories in any
  * language; otherwise returns `raw` unchanged (defensive fallback for unrecognized AI output). */
 export function localizeCategoryName(raw: string, lang: Lang): string {
-  const key = REVERSE_LOOKUP[raw.trim().toLowerCase()];
+  const key = REVERSE_LOOKUP[normalize(raw)];
   return key ? CATEGORY_NAMES[lang][key] : raw;
 }

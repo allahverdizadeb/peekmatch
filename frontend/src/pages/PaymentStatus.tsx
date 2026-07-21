@@ -5,6 +5,7 @@ import { AppHeader } from '../components/AppHeader';
 import { Button, Card } from '../components/ui';
 import { getOrder, simulatePayment, type Order } from '../lib/api';
 import { useLanguage } from '../lib/i18n/LanguageContext';
+import { track } from '../lib/analytics';
 
 type Stage = 'redirect' | 'pending' | 'success' | 'failed';
 
@@ -37,6 +38,7 @@ export default function PaymentStatus() {
       if (o.status === 'paid') {
         if (poll.current) clearInterval(poll.current);
         setStage('success');
+        track({ name: 'payment_completed', metadata: { package: o.package } }, o.analysisId);
       } else if (o.status === 'failed') {
         if (poll.current) clearInterval(poll.current);
         setStage('failed');

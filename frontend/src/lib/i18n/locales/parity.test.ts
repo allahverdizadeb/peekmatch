@@ -69,13 +69,7 @@ const SAME_VALUE_OK_KEYS = new Set([
   // Established English loanwords used as-is in Azerbaijani professional/tech vocabulary.
   'analysisForm.minCharsPrefix',
   'analysisForm.languagePills.en',
-  'pricing.premiumBadge',
-  'pricing.comparisonRows[4]',
-  'pricing.comparisonRows[7]',
-  'checkout.packages.2.features[2]',
   'paymentStatus.statusLabel',
-  'workspace.tabs.coverLetter',
-  'workspace.lockPackageNames.coverLetter',
   'workspace.tableStatus',
   'workspace.problem',
   'workspace.tellMeAboutYourselfTitle',

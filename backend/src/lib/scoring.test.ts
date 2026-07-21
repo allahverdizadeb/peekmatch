@@ -5,6 +5,9 @@ import {
   computeRequirementCounts,
   computeCriticalGapsCount,
   applyScoringOverrides,
+  sanitizeCvChangePlan,
+  computeCvChangesSummary,
+  computeInterviewRisksCount,
   type ScoredRequirement,
 } from './scoring.js';
 
@@ -182,3 +185,101 @@ describe('applyScoringOverrides', () => {
     expect(applyScoringOverrides(result)).toBe(result);
   });
 });
+
+const card = (
+  priority: ScoredRequirement['importance'],
+  changeType: 'rewrite' | 'add' | 'clarify' | 'remove',
+  evidenceFromCv: string[] = [],
+  overrides: Partial<{ whatToChange: string; problem: string; recommendedText: string }> = {},
+) => ({
+  priority,
+  changeType,
+  evidenceFromCv,
+  whatToChange: overrides.whatToChange ?? 'Bu mətni daha konkret yazın.',
+  problem: overrides.problem ?? 'Vakansiyada bu təcrübə vacibdir.',
+  recommendedText: overrides.recommendedText ?? 'Nümunə tövsiyə mətni.',
+});
+
+describe('sanitizeCvChangePlan — Truth Lock enforcement in code, not just prompt', () => {
+  it('drops a rewrite/add/remove card that cites zero CV evidence — an unevidenced concrete claim is exactly the fabrication risk Truth Lock exists to prevent', () => {
+    const cards = [card('kritik', 'rewrite', []), card('əsas', 'add', []), card('üstünlük', 'remove', [])];
+    expect(sanitizeCvChangePlan(cards)).toEqual([]);
+  });
+
+  it('keeps a rewrite/add/remove card that cites at least one piece of evidence', () => {
+    const cards = [card('kritik', 'rewrite', ['CV mentions 5 years at Acme'])];
+    expect(sanitizeCvChangePlan(cards)).toHaveLength(1);
+  });
+
+  it('keeps a "clarify" card even with zero evidence — citing nothing is the whole point of asking the candidate to confirm', () => {
+    const cards = [card('əsas', 'clarify', [])];
+    expect(sanitizeCvChangePlan(cards)).toHaveLength(1);
+  });
+
+  it('treats whitespace-only evidence strings as no evidence', () => {
+    const cards = [card('kritik', 'rewrite', ['   ', ''])];
+    expect(sanitizeCvChangePlan(cards)).toEqual([]);
+  });
+});
+
+describe('sanitizeCvChangePlan — concise-by-design length enforcement', () => {
+  it('leaves on-target short fields untouched', () => {
+    const cards = [card('kritik', 'rewrite', ['evidence'])];
+    const [sanitized] = sanitizeCvChangePlan(cards);
+    expect(sanitized.whatToChange).toBe('Bu mətni daha konkret yazın.');
+    expect(sanitized.problem).toBe('Vakansiyada bu təcrübə vacibdir.');
+    expect(sanitized.recommendedText).toBe('Nümunə tövsiyə mətni.');
+  });
+
+  it('truncates an oversized whatToChange/problem to a bounded character length with an ellipsis', () => {
+    const cards = [
+      card('kritik', 'rewrite', ['evidence'], { whatToChange: 'x'.repeat(300), problem: 'y'.repeat(300) }),
+    ];
+    const [sanitized] = sanitizeCvChangePlan(cards);
+    expect(sanitized.whatToChange.length).toBeLessThan(300);
+    expect(sanitized.whatToChange.endsWith('…')).toBe(true);
+    expect(sanitized.problem.length).toBeLessThan(300);
+    expect(sanitized.problem.endsWith('…')).toBe(true);
+  });
+
+  it('truncates an oversized recommendedText to a bounded word count rather than an unbounded paragraph', () => {
+    const longText = Array.from({ length: 200 }, (_, i) => `söz${i}`).join(' ');
+    const cards = [card('kritik', 'rewrite', ['evidence'], { recommendedText: longText })];
+    const [sanitized] = sanitizeCvChangePlan(cards);
+    const wordCount = sanitized.recommendedText.replace('…', '').trim().split(/\s+/).length;
+    expect(wordCount).toBeLessThanOrEqual(100);
+    expect(sanitized.recommendedText.endsWith('…')).toBe(true);
+  });
+
+  it('truncates each oversized evidence reference independently rather than dropping the card', () => {
+    const cards = [card('kritik', 'rewrite', ['e'.repeat(200), 'short one'])];
+    const [sanitized] = sanitizeCvChangePlan(cards);
+    expect(sanitized.evidenceFromCv[0].length).toBeLessThan(200);
+    expect(sanitized.evidenceFromCv[1]).toBe('short one');
+  });
+});
+
+describe('computeCvChangesSummary', () => {
+  it('counts cards by priority tier, matching the free-tier premium-preview numbers', () => {
+    const cards = [{ priority: 'kritik' as const }, { priority: 'kritik' as const }, { priority: 'əsas' as const }, { priority: 'üstünlük' as const }];
+    expect(computeCvChangesSummary(cards)).toEqual({ critical: 2, important: 1, optional: 1 });
+  });
+
+  it('returns all zeros for an empty plan rather than throwing', () => {
+    expect(computeCvChangesSummary([])).toEqual({ critical: 0, important: 0, optional: 0 });
+  });
+});
+
+describe('computeInterviewRisksCount', () => {
+  it('counts kritik OR əsas requirements that are not met — broader than criticalGapsCount (kritik only)', () => {
+    const requirements = [
+      req('kritik', 'missing'),
+      req('əsas', 'partial'),
+      req('əsas', 'met'), // met — not a risk
+      req('üstünlük', 'missing'), // üstünlük — never counted as an interview risk
+    ];
+    expect(computeInterviewRisksCount(requirements)).toBe(2);
+    expect(computeInterviewRisksCount(requirements)).not.toBe(computeCriticalGapsCount(requirements));
+  });
+});
+

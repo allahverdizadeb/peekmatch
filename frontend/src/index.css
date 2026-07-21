@@ -15,6 +15,7 @@
   --color-text2: #52667a;
   --color-muted: #74879a;
   --color-border: #dde5ec;
+  --color-border-strong: #c7d2dc;
 
   --color-success: #198754;
   --color-success-bg: #eaf7f0;
@@ -27,6 +28,25 @@
   --color-premium: #7057d9;
   --color-premium-bg: #f0edfb;
 
+  /* deeper-than-navy surface for dark "command centre" bands (hero, dark stat strips) — navy
+     itself stays the body-text color, so this is a distinct role, not a rename. */
+  --color-ink: #0a1e33;
+  --color-ink-2: #142d47;
+
+  /* secondary accent (warm gold) — milestones, achievement/readiness-positive highlights.
+     Deliberately distinct from success (green, "matched/good" data status) and teal (brand/CTA)
+     so it reads as a third, gamification-specific signal rather than "another green". */
+  --color-accent: #c08a2e;
+  --color-accent-bg: #faf1de;
+
+  /* neutral data-series palette for non-status charts (e.g. Strength Profile) — kept separate
+     from the status palette above so a chart bar's color never gets mistaken for a pass/fail signal. */
+  --color-chart-1: #102a43;
+  --color-chart-2: #0f9d91;
+  --color-chart-3: #c08a2e;
+  --color-chart-4: #3478f6;
+  --color-chart-5: #7057d9;
+
   /* radii */
   --radius-rc: 14px;
   --radius-rl: 18px;
@@ -36,9 +56,12 @@
   --shadow-sh-sm: 0 1px 2px rgba(16, 42, 67, 0.06);
   --shadow-sh: 0 4px 16px rgba(16, 42, 67, 0.07);
   --shadow-sh-lg: 0 14px 44px rgba(16, 42, 67, 0.12);
+  --shadow-sh-xl: 0 24px 64px rgba(10, 30, 51, 0.18);
 
-  /* typography */
+  /* typography — Inter for body/UI, Fraunces (editorial serif) for display headings and large
+     metric numerals only, via the `font-display` utility below. */
   --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+  --font-display: "Fraunces", Georgia, serif;
 
   --breakpoint-xs: 400px;
 }
@@ -85,6 +108,10 @@
   .lift:hover {
     transform: translateY(-3px);
     box-shadow: var(--shadow-sh-lg);
+  }
+  .font-display {
+    font-family: var(--font-display);
+    font-optical-sizing: auto;
   }
 }
 

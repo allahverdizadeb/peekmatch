@@ -3,7 +3,8 @@ import cors from 'cors';
 import { analysesRouter } from './routes/analyses.js';
 import { ordersRouter } from './routes/orders.js';
 import { suggestionsRouter } from './routes/suggestions.js';
-import { aiConfigured } from './lib/anthropic.js';
+import { eventsRouter } from './routes/events.js';
+import { aiConfigured } from './lib/ai.js';
 
 /** The Express app itself, separate from index.ts's .listen()/cron wiring, so tests can exercise
  * real HTTP routes (via supertest) without a live server or the cleanup interval running. */
@@ -16,6 +17,7 @@ app.get('/api/health', (_req, res) => res.json({ ok: true, aiConfigured: aiConfi
 app.use('/api/analyses', analysesRouter);
 app.use('/api/orders', ordersRouter);
 app.use('/api/suggestions', suggestionsRouter);
+app.use('/api/events', eventsRouter);
 
 // Global error handler: without this, an uncaught exception falls through to Express's default
 // handler, which (outside NODE_ENV=production) renders an HTML page containing the full stack

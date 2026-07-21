@@ -5,24 +5,66 @@ import { extractCvText, CvParseError, MAX_CV_BYTES, MIN_CV_TEXT_CHARS } from '..
 import { extractVacancyFromUrl, VacancyExtractError, MIN_VACANCY_TEXT_CHARS } from '../lib/vacancyExtract.js';
 import {
   analyzeMatch,
-  generateTailoredCv,
-  generateCoverLetter,
+  generateCvChangePlan,
   generateInterviewPrep,
+  AiError,
+  type AiErrorCode,
   type MatchResult,
+  type CvChangePlan,
+  type CvChangeCard,
+  type InterviewPrep,
   type SelfAttestedGap,
-} from '../lib/anthropic.js';
-import { cvToDocx, cvToPdf, coverLetterToDocx, reportToPdf, getReportLabels, docFileName, escapeHtml } from '../lib/docGen.js';
-import { highestOwnedPackage, ownedPackages, unlocksReport, unlocksCv, unlocksInterview } from '../lib/pricing.js';
+} from '../lib/ai.js';
+import { reportToPdf, getReportLabels, docFileName, escapeHtml } from '../lib/docGen.js';
+import { highestOwnedPackage, ownedPackages, unlocksApplication, unlocksInterview } from '../lib/pricing.js';
 import { resolveAnalysis, respondUnresolved, type AnalysisRow } from '../lib/analysisLifecycle.js';
+import { sanitizeCvChangePlan, computeCvChangesSummary, computeInterviewRisksCount } from '../lib/scoring.js';
+import { buildEvidenceChain } from '../lib/evidenceChain.js';
 
 const upload = multer({ limits: { fileSize: MAX_CV_BYTES } });
 const RETENTION_MS = 24 * 60 * 60 * 1000;
 
 export const analysesRouter = Router();
 
+/** Maps an AiError's code to an HTTP status: 503 for transient provider issues worth retrying,
+ * 502 for an upstream (AI provider) response problem that isn't the client's fault, 500 for
+ * operator-side config/billing issues. */
+function aiErrorStatus(code: AiErrorCode): number {
+  switch (code) {
+    case 'rate_limited':
+    case 'timeout':
+    case 'network_error':
+      return 503;
+    case 'model_unavailable':
+    case 'refusal':
+    case 'invalid_response':
+      return 502;
+    default:
+      return 500;
+  }
+}
+
+/** Shared error responder for every route that triggers an AI generation. AiError's .message is
+ * already a safe, Azerbaijani, user-facing string (translated in ai.ts) with no request/response
+ * internals or secrets — this only adds the right HTTP status and a machine-readable `code` on
+ * top. Anything that isn't an AiError (a DB error, a bug, etc.) still gets the pre-existing
+ * generic fallback so no unexpected exception ever leaks detail to the client. */
+function respondAiError(res: import('express').Response, err: unknown, fallbackMessage: string): void {
+  if (err instanceof AiError) {
+    res.status(aiErrorStatus(err.code)).json({ error: err.message, code: err.code });
+    return;
+  }
+  console.error(err);
+  res.status(500).json({ error: fallbackMessage });
+}
+
 function buildSelfAttestedGap(analysis: AnalysisRow, full: MatchResult): SelfAttestedGap {
   if (analysis.selfAttestedGapConfirmed == null) return null;
-  return { requirement: full.mostImportantMissingRequirement, confirmed: analysis.selfAttestedGapConfirmed };
+  return {
+    requirement: full.mostImportantMissingRequirement,
+    confirmed: analysis.selfAttestedGapConfirmed,
+    details: analysis.selfAttestedGapDetails ?? undefined,
+  };
 }
 
 // ---------- create analysis (CV upload) ----------
@@ -128,30 +170,41 @@ analysesRouter.post('/:id/vacancy/manual', async (req, res) => {
 });
 
 // ---------- settings (language, consent) ----------
+const SUPPORTED_LANGUAGES = new Set(['az', 'en']);
+
+/** Any value other than 'az'/'en' (missing, malformed, or a removed legacy language like 'tr'/'ru')
+ * falls back to 'en' — PeekMatch targets the global market, so an unrecognized selection should
+ * never silently keep/produce Azerbaijani content. */
+function resolveOutputLanguage(value: unknown): string {
+  return typeof value === 'string' && SUPPORTED_LANGUAGES.has(value) ? value : 'en';
+}
+
 analysesRouter.patch('/:id/settings', async (req, res) => {
   const resolved = await resolveAnalysis(req.params.id);
   if (resolved.kind !== 'ok') return respondUnresolved(res, resolved);
   const data: { outputLanguage?: string; consent?: boolean } = {};
-  if (typeof req.body.outputLanguage === 'string') data.outputLanguage = req.body.outputLanguage;
+  if (typeof req.body.outputLanguage !== 'undefined') data.outputLanguage = resolveOutputLanguage(req.body.outputLanguage);
   if (typeof req.body.consent === 'boolean') data.consent = req.body.consent;
   await prisma.analysis.update({ where: { id: resolved.analysis.id }, data });
   res.json({ ok: true });
 });
 
-// ---------- self-attestation (Power BI-style "do you actually have this?" prompt) ----------
+// ---------- self-attestation ("do you actually have this?" prompt, Truth Lock gate) ----------
 analysesRouter.patch('/:id/self-attest', async (req, res) => {
   const resolved = await resolveAnalysis(req.params.id);
   if (resolved.kind !== 'ok') return respondUnresolved(res, resolved);
   if (typeof req.body.confirmed !== 'boolean') return res.status(400).json({ error: 'Yanlış dəyər.' });
+  const details = typeof req.body.details === 'string' ? req.body.details.slice(0, 2000) : null;
   const analysis = resolved.analysis;
-  // If a tailored CV/cover letter/interview prep was already generated with the old answer,
-  // invalidate the caches so the next fetch regenerates using the new answer.
-  const changed = analysis.selfAttestedGapConfirmed !== req.body.confirmed;
+  // If the CV Change Plan / interview prep were already generated with the old answer (or no
+  // answer), invalidate the caches so the next fetch regenerates using the new one.
+  const changed = analysis.selfAttestedGapConfirmed !== req.body.confirmed || analysis.selfAttestedGapDetails !== details;
   await prisma.analysis.update({
     where: { id: analysis.id },
     data: {
       selfAttestedGapConfirmed: req.body.confirmed,
-      ...(changed ? { tailoredCvJson: null, coverLetterJson: null, interviewPrepJson: null } : {}),
+      selfAttestedGapDetails: details,
+      ...(changed ? { cvChangePlanJson: null, interviewPrepJson: null } : {}),
     },
   });
   res.json({ ok: true });
@@ -177,9 +230,11 @@ analysesRouter.delete('/:id', async (req, res) => {
       vacancyDomain: null,
       resultJson: null,
       reportJson: null,
-      tailoredCvJson: null,
-      coverLetterJson: null,
+      cvChangePlanJson: null,
       interviewPrepJson: null,
+      interviewPrepStatus: 'idle',
+      interviewPrepFailReason: null,
+      selfAttestedGapDetails: null,
     },
   });
   res.json({ ok: true });
@@ -218,11 +273,13 @@ async function runAnalysis(id: string) {
   if (!analysis || !analysis.cvText || !analysis.vacancyText) return;
   try {
     const result = await analyzeMatch(analysis.cvText, analysis.vacancyText, analysis.outputLanguage);
-    // The real AI call above can take 15-90+ seconds — long enough for the user to hit "delete my
-    // data" while it's in flight. Writing resultJson back unconditionally would silently resurrect
-    // content that was just nulled, defeating immediate deletion. updateMany (not update) lets the
-    // WHERE clause filter on deletedAt: a row deleted in the meantime simply won't match, so this
-    // becomes a no-op instead of undoing the deletion.
+
+    // Mark the analysis 'done' as soon as analyzeMatch itself finishes — do NOT wait on the CV
+    // Change Plan generation below first. A real live test showed the two AI calls run back to
+    // back pushed the processing screen from ~30-60s to 2.5+ minutes, which is exactly the
+    // "why is this stuck" complaint this was written to prevent. updateMany (not update) lets the
+    // WHERE clause filter on deletedAt: a row deleted while the AI call was in flight simply won't
+    // match, so this becomes a no-op instead of resurrecting content that was just nulled.
     await prisma.analysis.updateMany({
       where: { id, deletedAt: null },
       data: {
@@ -233,10 +290,55 @@ async function runAnalysis(id: string) {
         vacancyCompany: analysis.vacancyCompany || result.vacancyCompanyGuess,
       },
     });
+
+    // CV Change Plan generation happens AFTER the analysis is already marked 'done', in the same
+    // background job but not blocking it — eagerly (for every analysis, not purchase-gated) so the
+    // free result can show real change/risk counts, but asynchronously so it doesn't double the
+    // user-visible wait. GET /:id/result reads cvChangePlanJson opportunistically (see below) and
+    // reports cvChangePlanReady: false while this is still in flight rather than blocking on it.
+    try {
+      const fresh = await prisma.analysis.findUnique({ where: { id } });
+      if (!fresh || fresh.deletedAt || !fresh.cvText || !fresh.vacancyText) return;
+      const plan = await generateCvChangePlan(fresh.cvText, fresh.vacancyText, result, fresh.outputLanguage);
+      await prisma.analysis.updateMany({
+        where: { id, deletedAt: null },
+        data: { cvChangePlanJson: JSON.stringify({ cards: sanitizeCvChangePlan(plan.cards) } satisfies CvChangePlan) },
+      });
+    } catch (planErr) {
+      console.error('[generateCvChangePlan]', planErr);
+    }
   } catch (err) {
     console.error('[analyzeMatch]', err);
-    await prisma.analysis.updateMany({ where: { id, deletedAt: null }, data: { status: 'failed', failReason: 'Analiz tamamlanmadı.' } });
+    // AiError's .message is already a safe, Azerbaijani, user-facing string — surfacing it here
+    // means the /status poll (and the frontend's failure state) can show *why* the analysis
+    // failed (rate limited, model unavailable, etc.) instead of one opaque message for every case.
+    const failReason = err instanceof AiError ? err.message : 'Analiz tamamlanmadı.';
+    await prisma.analysis.updateMany({ where: { id, deletedAt: null }, data: { status: 'failed', failReason } });
   }
+}
+
+/** Read-or-generate for the CV Change Plan, used as: (a) a fallback when the eager generation in
+ * runAnalysis() failed or hasn't run yet, and (b) the regeneration path after a self-attestation
+ * answer changes (which nulls cvChangePlanJson). Always returns the Truth-Lock-sanitized plan. */
+async function ensureCvChangePlan(analysisId: string): Promise<CvChangePlan> {
+  const analysis = await prisma.analysis.findUnique({ where: { id: analysisId } });
+  if (!analysis) throw new Error('not found');
+  if (analysis.cvChangePlanJson) return JSON.parse(analysis.cvChangePlanJson);
+  const full: MatchResult = JSON.parse(analysis.resultJson!);
+  const plan = await generateCvChangePlan(
+    analysis.cvText!,
+    analysis.vacancyText!,
+    full,
+    analysis.outputLanguage,
+    buildSelfAttestedGap(analysis, full),
+  );
+  const sanitized: CvChangePlan = { cards: sanitizeCvChangePlan(plan.cards) };
+  await prisma.analysis.update({ where: { id: analysisId }, data: { cvChangePlanJson: JSON.stringify(sanitized) } });
+  return sanitized;
+}
+
+function pickExampleCard(cards: CvChangeCard[]): CvChangeCard | null {
+  return cards.find((c) => c.priority === 'kritik') ?? cards.find((c) => c.changeType === 'rewrite') ?? cards[0] ?? null;
 }
 
 // ---------- status / result ----------
@@ -280,12 +382,31 @@ analysesRouter.get('/:id/result', async (req, res) => {
   }
   const full: MatchResult = JSON.parse(analysis.resultJson);
   const owned = highestOwnedPackage(await ownedPackages(analysis.id));
+
+  // Real, non-hardcoded premium-preview counts — never a static "unlock premium" message. Reads
+  // cvChangePlanJson opportunistically rather than generating it here: this endpoint must never
+  // block on an AI call (a live test showed that turned an instant free-result load into a
+  // 1-2 minute wait the first time it was hit after "done"). The plan is generated in the
+  // background by runAnalysis() right after analyzeMatch finishes; while it's still in flight this
+  // reports cvChangePlanReady: false with zero counts, and the frontend polls again shortly.
+  let cvChangesSummary = { critical: 0, important: 0, optional: 0 };
+  let exampleCard: CvChangeCard | null = null;
+  let cvChangePlanReady = false;
+  if (analysis.cvChangePlanJson) {
+    const plan: CvChangePlan = JSON.parse(analysis.cvChangePlanJson);
+    cvChangesSummary = computeCvChangesSummary(plan.cards);
+    exampleCard = pickExampleCard(plan.cards);
+    cvChangePlanReady = true;
+  }
+
   // Free dashboard: everything except the full requirement matrix / weak presentation / improvement ranking.
-  // realCompatibility ships here as an upsell teaser; realCompatibilityGap (the "why") stays report-gated.
+  // realCompatibility ships here as an upsell teaser; realCompatibilityGap (the "why") stays gated.
   res.json({
     vacancy: { title: analysis.vacancyTitle, company: analysis.vacancyCompany, location: analysis.vacancyLocation },
     compatibility: full.compatibility,
     compatibilityLabel: full.compatibilityLabel,
+    cvPresentationScore: full.cvPresentationScore,
+    cvPresentationLabel: full.cvPresentationLabel,
     realCompatibility: full.realCompatibility,
     mainRequirementsTotal: full.mainRequirementsTotal,
     mainRequirementsMet: full.mainRequirementsMet,
@@ -304,6 +425,10 @@ analysesRouter.get('/:id/result', async (req, res) => {
     recommendationReasons: full.recommendationReasons,
     recommendationNextAction: full.recommendationNextAction,
     requirementsPreview: full.requirements.slice(0, 2),
+    cvChangesSummary,
+    interviewRisksCount: computeInterviewRisksCount(full.requirements),
+    exampleCard,
+    cvChangePlanReady,
     ownedPackage: owned,
     selfAttestedGapConfirmed: analysis.selfAttestedGapConfirmed,
   });
@@ -315,12 +440,13 @@ analysesRouter.get('/:id/report', async (req, res) => {
   if (resolved.kind !== 'ok') return respondUnresolved(res, resolved);
   const analysis = resolved.analysis;
   const owned = highestOwnedPackage(await ownedPackages(analysis.id));
-  if (!unlocksReport(owned)) return res.status(402).json({ error: 'Bu paket alınmayıb.', ownedPackage: owned });
+  if (!unlocksApplication(owned)) return res.status(402).json({ error: 'Bu paket alınmayıb.', ownedPackage: owned });
   if (!analysis.resultJson) return res.status(409).json({ error: 'Analiz hazır deyil.' });
   const full: MatchResult = JSON.parse(analysis.resultJson);
   res.json({
     vacancy: { title: analysis.vacancyTitle, company: analysis.vacancyCompany, location: analysis.vacancyLocation },
     compatibility: full.compatibility,
+    cvPresentationScore: full.cvPresentationScore,
     realCompatibility: full.realCompatibility,
     realCompatibilityGap: full.realCompatibilityGap,
     mainRequirementsTotal: full.mainRequirementsTotal,
@@ -341,7 +467,7 @@ analysesRouter.get('/:id/report/download', async (req, res) => {
   if (resolved.kind !== 'ok') return respondUnresolved(res, resolved);
   const analysis = resolved.analysis;
   const owned = highestOwnedPackage(await ownedPackages(analysis.id));
-  if (!unlocksReport(owned)) return res.status(402).json({ error: 'Bu paket alınmayıb.' });
+  if (!unlocksApplication(owned)) return res.status(402).json({ error: 'Bu paket alınmayıb.' });
   if (!analysis.resultJson) return res.status(409).json({ error: 'Analiz hazır deyil.' });
   const full: MatchResult = JSON.parse(analysis.resultJson);
   const labels = getReportLabels(analysis.outputLanguage);
@@ -362,127 +488,131 @@ analysesRouter.get('/:id/report/download', async (req, res) => {
   res.send(pdf);
 });
 
-// ---------- paid: tailored CV ----------
-async function ensureTailoredCv(analysisId: string) {
-  const analysis = await prisma.analysis.findUnique({ where: { id: analysisId } });
-  if (!analysis) throw new Error('not found');
-  if (analysis.tailoredCvJson) return JSON.parse(analysis.tailoredCvJson);
-  const full: MatchResult = JSON.parse(analysis.resultJson!);
-  const cv = await generateTailoredCv(
-    analysis.cvText!,
-    analysis.vacancyText!,
-    full,
-    analysis.outputLanguage,
-    buildSelfAttestedGap(analysis, full),
-  );
-  await prisma.analysis.update({ where: { id: analysisId }, data: { tailoredCvJson: JSON.stringify(cv) } });
-  return cv;
-}
-
-analysesRouter.get('/:id/cv', async (req, res) => {
+// ---------- paid: CV Change Plan ----------
+analysesRouter.get('/:id/cv-plan', async (req, res) => {
   const resolved = await resolveAnalysis(req.params.id);
   if (resolved.kind !== 'ok') return respondUnresolved(res, resolved);
   const analysis = resolved.analysis;
   const owned = highestOwnedPackage(await ownedPackages(analysis.id));
-  if (!unlocksCv(owned)) return res.status(402).json({ error: 'Bu paket alınmayıb.', ownedPackage: owned });
+  if (!unlocksApplication(owned)) return res.status(402).json({ error: 'Bu paket alınmayıb.', ownedPackage: owned });
   try {
-    const cv = await ensureTailoredCv(analysis.id);
-    res.json({ cv, ownedPackage: owned });
+    const plan = await ensureCvChangePlan(analysis.id);
+    res.json({ cards: plan.cards, ownedPackage: owned });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'CV hazırlanarkən xəta baş verdi.' });
+    respondAiError(res, err, 'CV Dəyişiklik Planı hazırlanarkən xəta baş verdi.');
   }
 });
 
-analysesRouter.get('/:id/cv/download', async (req, res) => {
-  const resolved = await resolveAnalysis(req.params.id);
-  if (resolved.kind !== 'ok') return respondUnresolved(res, resolved);
-  const analysis = resolved.analysis;
-  const owned = highestOwnedPackage(await ownedPackages(analysis.id));
-  if (!unlocksCv(owned)) return res.status(402).json({ error: 'Bu paket alınmayıb.' });
-  const cv = await ensureTailoredCv(analysis.id);
-  const format = req.query.format === 'pdf' ? 'pdf' : 'docx';
-  const fileName = docFileName('cv', analysis.outputLanguage);
-  if (format === 'pdf') {
-    const pdf = await cvToPdf(cv, analysis.outputLanguage);
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="${fileName}.pdf"`);
-    res.send(pdf);
-  } else {
-    const docx = await cvToDocx(cv, analysis.outputLanguage);
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
-    res.setHeader('Content-Disposition', `attachment; filename="${fileName}.docx"`);
-    res.send(docx);
-  }
-});
-
-// ---------- paid: cover letter ----------
-async function ensureCoverLetter(analysisId: string) {
-  const analysis = await prisma.analysis.findUnique({ where: { id: analysisId } });
-  if (!analysis) throw new Error('not found');
-  if (analysis.coverLetterJson) return JSON.parse(analysis.coverLetterJson);
-  const full: MatchResult = JSON.parse(analysis.resultJson!);
-  const letter = await generateCoverLetter(analysis.cvText!, analysis.vacancyText!, full, analysis.outputLanguage);
-  await prisma.analysis.update({ where: { id: analysisId }, data: { coverLetterJson: JSON.stringify(letter) } });
-  return letter;
+// ---------- paid: Interview Playbook ----------
+// Fire-and-forget job with a persisted, DB-backed status (idle -> processing -> done | failed),
+// matching runAnalysis()'s established pattern instead of one long-lived blocking request. This is
+// what makes "one generation job per analysis" a real, atomic guarantee rather than an in-memory
+// convention: the claim below is a single WHERE-guarded UPDATE, so even two genuinely concurrent
+// requests (double-click, a second tab, a page refresh mid-generation) can't both start real work —
+// exactly one of them will match the WHERE clause and flip idle/failed -> processing; the other
+// gets count: 0 and just reports the (now 'processing') status back. This also survives a server
+// restart cleanly: status is a real column, not a Map that resets on every deploy.
+function safeTimingLog(label: string, ms: number, extra?: Record<string, string | number>) {
+  console.log(`[interview-prep:timing] ${label} ${ms}ms${extra ? ' ' + JSON.stringify(extra) : ''}`);
 }
 
-analysesRouter.get('/:id/cover-letter', async (req, res) => {
-  const resolved = await resolveAnalysis(req.params.id);
-  if (resolved.kind !== 'ok') return respondUnresolved(res, resolved);
-  const analysis = resolved.analysis;
-  const owned = highestOwnedPackage(await ownedPackages(analysis.id));
-  if (!unlocksCv(owned)) return res.status(402).json({ error: 'Bu paket alınmayıb.', ownedPackage: owned });
+async function runInterviewPrepGeneration(analysisId: string): Promise<void> {
+  const jobStartedAt = Date.now();
+  const loadStartedAt = Date.now();
+  const analysis = await prisma.analysis.findUnique({ where: { id: analysisId } });
+  safeTimingLog('db_load', Date.now() - loadStartedAt);
+
+  if (!analysis || analysis.deletedAt || !analysis.cvText || !analysis.resultJson) {
+    await prisma.analysis.updateMany({
+      where: { id: analysisId, deletedAt: null },
+      data: { interviewPrepStatus: 'failed', interviewPrepFailReason: 'Analiz məlumatları tapılmadı.' },
+    });
+    return;
+  }
+
   try {
-    const letter = await ensureCoverLetter(analysis.id);
-    res.json({ letter, ownedPackage: owned });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Cover letter hazırlanarkən xəta baş verdi.' });
-  }
-});
+    const full: MatchResult = JSON.parse(analysis.resultJson);
+    const prep = await generateInterviewPrep(analysis.cvText, full, analysis.outputLanguage, buildSelfAttestedGap(analysis, full));
 
-analysesRouter.get('/:id/cover-letter/download', async (req, res) => {
+    const saveStartedAt = Date.now();
+    await prisma.analysis.updateMany({
+      where: { id: analysisId, deletedAt: null },
+      data: { interviewPrepJson: JSON.stringify(prep), interviewPrepStatus: 'done', interviewPrepFailReason: null },
+    });
+    safeTimingLog('db_save', Date.now() - saveStartedAt);
+    safeTimingLog('total', Date.now() - jobStartedAt);
+  } catch (err) {
+    // Never log CV/vacancy content, prompts, AI output text, or the API key — AiError.message is
+    // already a safe, pre-sanitized user-facing string (see ai.ts); anything else is a
+    // non-AiError bug, logged via console.error's normal object formatting (stack trace + message
+    // only, no request/response body attached).
+    console.error('[interview-prep] generation failed', err);
+    const failReason = err instanceof AiError ? err.message : 'Müsahibə hazırlığı yaradıla bilmədi.';
+    await prisma.analysis.updateMany({
+      where: { id: analysisId, deletedAt: null },
+      data: { interviewPrepStatus: 'failed', interviewPrepFailReason: failReason },
+    });
+    safeTimingLog('total_failed', Date.now() - jobStartedAt);
+  }
+}
+
+// Starts generation (idempotently — see above) and returns immediately with the current status.
+// Never blocks on the AI call, unlike the old GET /:id/interview.
+analysesRouter.post('/:id/interview/generate', async (req, res) => {
   const resolved = await resolveAnalysis(req.params.id);
   if (resolved.kind !== 'ok') return respondUnresolved(res, resolved);
   const analysis = resolved.analysis;
   const owned = highestOwnedPackage(await ownedPackages(analysis.id));
-  if (!unlocksCv(owned)) return res.status(402).json({ error: 'Bu paket alınmayıb.' });
-  const letter = await ensureCoverLetter(analysis.id);
-  const docx = await coverLetterToDocx(letter, analysis.vacancyTitle || '', analysis.vacancyCompany || '');
-  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
-  res.setHeader('Content-Disposition', `attachment; filename="${docFileName('coverLetter', analysis.outputLanguage)}.docx"`);
-  res.send(docx);
+  if (!unlocksInterview(owned)) return res.status(402).json({ error: 'Bu paket alınmayıb.', ownedPackage: owned });
+
+  if (analysis.interviewPrepJson) return res.json({ status: 'done' });
+
+  const claim = await prisma.analysis.updateMany({
+    where: { id: analysis.id, interviewPrepStatus: { in: ['idle', 'failed'] } },
+    data: { interviewPrepStatus: 'processing', interviewPrepFailReason: null },
+  });
+  if (claim.count === 1) {
+    runInterviewPrepGeneration(analysis.id).catch((err) => console.error('[interview-prep] unhandled', err));
+  }
+  res.json({ status: 'processing' });
 });
 
-// ---------- paid: interview prep ----------
-async function ensureInterviewPrep(analysisId: string) {
-  const analysis = await prisma.analysis.findUnique({ where: { id: analysisId } });
-  if (!analysis) throw new Error('not found');
-  if (analysis.interviewPrepJson) return JSON.parse(analysis.interviewPrepJson);
-  const full: MatchResult = JSON.parse(analysis.resultJson!);
-  const prep = await generateInterviewPrep(
-    analysis.cvText!,
-    analysis.vacancyText!,
-    full,
-    analysis.outputLanguage,
-    buildSelfAttestedGap(analysis, full),
-  );
-  await prisma.analysis.update({ where: { id: analysisId }, data: { interviewPrepJson: JSON.stringify(prep) } });
-  return prep;
-}
+// Lightweight poll target — no DB write, no AI call, just the current persisted status.
+analysesRouter.get('/:id/interview/status', async (req, res) => {
+  const resolved = await resolveAnalysis(req.params.id);
+  if (resolved.kind !== 'ok') return respondUnresolved(res, resolved);
+  const analysis = resolved.analysis;
+  const owned = highestOwnedPackage(await ownedPackages(analysis.id));
+  if (!unlocksInterview(owned)) return res.status(402).json({ error: 'Bu paket alınmayıb.', ownedPackage: owned });
+  res.json({ status: analysis.interviewPrepStatus, failReason: analysis.interviewPrepFailReason });
+});
 
+// Returns the finished result only — callers should poll /status until 'done' first (an existing
+// completed Playbook still returns immediately here with no extra work, same as before).
 analysesRouter.get('/:id/interview', async (req, res) => {
   const resolved = await resolveAnalysis(req.params.id);
   if (resolved.kind !== 'ok') return respondUnresolved(res, resolved);
   const analysis = resolved.analysis;
   const owned = highestOwnedPackage(await ownedPackages(analysis.id));
   if (!unlocksInterview(owned)) return res.status(402).json({ error: 'Bu paket alınmayıb.', ownedPackage: owned });
-  try {
-    const prep = await ensureInterviewPrep(analysis.id);
-    res.json({ prep, ownedPackage: owned });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Müsahibə hazırlığı hazırlanarkən xəta baş verdi.' });
-  }
+  if (!analysis.interviewPrepJson) return res.status(409).json({ error: 'Müsahibə hazırlığı hələ hazır deyil.' });
+  res.json({ prep: JSON.parse(analysis.interviewPrepJson) as InterviewPrep, ownedPackage: owned });
 });
+
+// ---------- paid: Evidence Chain ----------
+// Pure derived view — no AI call, just cross-references requirement titles already present across
+// resultJson / cvChangePlanJson / interviewPrepJson (see lib/evidenceChain.ts).
+analysesRouter.get('/:id/evidence-chain', async (req, res) => {
+  const resolved = await resolveAnalysis(req.params.id);
+  if (resolved.kind !== 'ok') return respondUnresolved(res, resolved);
+  const analysis = resolved.analysis;
+  const owned = highestOwnedPackage(await ownedPackages(analysis.id));
+  if (!unlocksApplication(owned)) return res.status(402).json({ error: 'Bu paket alınmayıb.', ownedPackage: owned });
+  if (!analysis.resultJson) return res.status(409).json({ error: 'Analiz hazır deyil.' });
+  const full: MatchResult = JSON.parse(analysis.resultJson);
+  const plan: CvChangePlan = analysis.cvChangePlanJson ? JSON.parse(analysis.cvChangePlanJson) : { cards: [] };
+  const interview: InterviewPrep | null = analysis.interviewPrepJson ? JSON.parse(analysis.interviewPrepJson) : null;
+  const questions = interview ? [...interview.hrQuestions, ...interview.situational, ...interview.technical] : [];
+  res.json({ chain: buildEvidenceChain(full.requirements, plan.cards, questions) });
+});
+

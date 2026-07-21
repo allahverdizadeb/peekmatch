@@ -1,7 +1,10 @@
 node_modules
 dist
-# Keep environment variables out of version control
+# Keep environment variables out of version control — .env.* covers .env.local/.env.production/etc
+# too; .env.example is a placeholder-only template and must stay tracked.
 .env
+.env.*
+!.env.example
 
 /src/generated/prisma
 

@@ -2,8 +2,8 @@ import { defineConfig, devices } from '@playwright/test';
 
 /** E2E smoke tests for the critical user journeys. Assumes both dev servers on their standard
  * ports; reuses them if already running (the normal case during development), otherwise starts
- * them itself. Uses whatever ANTHROPIC_API_KEY is (or isn't) set in backend/.env — with a real
- * key, tests exercise the real Anthropic API; without one, they exercise the deterministic
+ * them itself. Uses whatever OPENAI_API_KEY is (or isn't) set in backend/.env — with a real
+ * key, tests exercise the real OpenAI API; without one, they exercise the deterministic
  * offline-fallback analyzer (see CLAUDE.md), which is what CI should run to avoid depending on a
  * paid external API for the full suite. */
 export default defineConfig({

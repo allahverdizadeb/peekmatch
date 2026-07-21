@@ -1,17 +1,20 @@
 import { prisma } from '../db.js';
 
-export type PackageId = 1 | 2 | 3;
+export type PackageId = 1 | 2;
 
+// Package 1 unlocks the full report + CV Change Plan + Evidence Chain (previously split across two
+// separate report / CV-and-letter tiers) — merged into one, since a report you can't act on isn't a
+// meaningful standalone purchase. Package 2 adds the Interview Playbook on top.
 export const PACKAGES: Record<PackageId, { name: string; priceUsd: number }> = {
-  1: { name: 'Tam uyğunluq hesabatı', priceUsd: 0.49 },
-  2: { name: 'Vakansiyaya uyğun CV və cover letter', priceUsd: 0.99 },
-  3: { name: 'Tam müraciət və müsahibə paketi', priceUsd: 5.9 },
+  1: { name: 'Müraciət Paketi', priceUsd: 0.9 },
+  2: { name: 'Müsahibəyə Hazır Paketi', priceUsd: 2.9 },
 };
 
-/** Highest package a set of paid orders unlocks. Packages are cumulative — owning 3 implies 1 and 2. */
+/** Highest package a set of paid orders unlocks. Packages are cumulative — owning 2 implies 1.
+ * Any stale `package: 3` row from before the 3-tier -> 2-tier restructure is defensively capped to
+ * 2 (the new top tier). Other unrecognized numbers are ignored rather than treated as an unlock. */
 export function highestOwnedPackage(paidPackages: number[]): PackageId | 0 {
-  if (paidPackages.includes(3)) return 3;
-  if (paidPackages.includes(2)) return 2;
+  if (paidPackages.includes(2) || paidPackages.includes(3)) return 2;
   if (paidPackages.includes(1)) return 1;
   return 0;
 }
@@ -22,19 +25,17 @@ export async function ownedPackages(analysisId: string): Promise<number[]> {
 }
 
 /** Price to charge when upgrading from `owned` to `pkg` — the gap between tiers, computed in
- * integer cents to avoid float artifacts (e.g. 5.90 - 0.99 in raw floats). */
+ * integer cents to avoid float artifacts (e.g. 2.90 - 0.90 in raw floats). */
 export function upgradePriceUsd(pkg: PackageId, owned: PackageId | 0): number {
   const baseCents = Math.round(PACKAGES[pkg].priceUsd * 100);
   const ownedCents = owned === 0 ? 0 : Math.round(PACKAGES[owned].priceUsd * 100);
   return Math.max(0, baseCents - ownedCents) / 100;
 }
 
-export function unlocksReport(owned: number): boolean {
+/** Gates: report, CV Change Plan, and Evidence Chain all unlock together at package 1+. */
+export function unlocksApplication(owned: number): boolean {
   return owned >= 1;
 }
-export function unlocksCv(owned: number): boolean {
-  return owned >= 2;
-}
 export function unlocksInterview(owned: number): boolean {
-  return owned >= 3;
+  return owned >= 2;
 }

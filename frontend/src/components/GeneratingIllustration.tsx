@@ -1,6 +1,6 @@
-/** Loading-state illustration for Workspace tabs (Tailored CV / Cover Letter) while the AI
- * generation call is in flight: a stylized CV sheet whose lines grow in like text being typed,
- * hold, fade out, and loop, plus a pulsing AI sparkle badge on the corner. */
+/** Loading-state illustration for the CV Change Plan tab while the AI generation call is in
+ * flight: a stylized CV sheet whose lines grow in like text being typed, hold, fade out, and loop,
+ * plus a pulsing AI sparkle badge on the corner. */
 export function GeneratingIllustration() {
   return (
     <div className="relative w-80 h-[254px] mx-auto">

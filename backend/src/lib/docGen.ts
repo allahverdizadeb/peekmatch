@@ -1,17 +1,13 @@
-import { Document, Packer, Paragraph, TextRun, HeadingLevel } from 'docx';
 import { chromium } from 'playwright';
-import type { TailoredCv, CoverLetter } from './anthropic.js';
 
 export type DocLang = 'az' | 'en';
 
+/** Unrecognized values (missing, or a removed legacy language like 'tr'/'ru') fall back to English —
+ * PeekMatch targets the global market, so an unsupported selection should never default to
+ * Azerbaijani content. */
 function resolveDocLang(lang: string | null | undefined): DocLang {
-  return lang === 'en' ? lang : 'az';
+  return lang === 'az' ? lang : 'en';
 }
-
-const CV_LABELS: Record<DocLang, { summary: string; skills: string; experience: string; education: string; certifications: string; languages: string }> = {
-  az: { summary: 'Peşəkar xülasə', skills: 'Əsas bacarıqlar', experience: 'İş təcrübəsi', education: 'Təhsil', certifications: 'Sertifikatlar', languages: 'Dil bilikləri' },
-  en: { summary: 'Professional Summary', skills: 'Core Skills', experience: 'Work Experience', education: 'Education', certifications: 'Certifications', languages: 'Languages' },
-};
 
 /** Matches the frontend's t.workspace.statusLabel/importanceLabel wording exactly (Workspace.tsx's
  * report tab) so the downloaded report and the on-site report never show different translations
@@ -47,71 +43,14 @@ export function getReportLabels(lang: string | null | undefined) {
   return REPORT_LABELS[resolveDocLang(lang)];
 }
 
-const FILE_NAME: Record<DocLang, { cv: string; report: string; coverLetter: string }> = {
-  az: { cv: 'CV_Uygunlasdirilmis', report: 'Uygunluq_Hesabati', coverLetter: 'Cover_Letter' },
-  en: { cv: 'Tailored_CV', report: 'Compatibility_Report', coverLetter: 'Cover_Letter' },
+const FILE_NAME: Record<DocLang, { report: string }> = {
+  az: { report: 'Uygunluq_Hesabati' },
+  en: { report: 'Compatibility_Report' },
 };
 
 /** ASCII-safe filename stems (no Content-Disposition RFC 5987 encoding needed) per language. */
-export function docFileName(kind: 'cv' | 'report' | 'coverLetter', lang: string | null | undefined): string {
+export function docFileName(kind: 'report', lang: string | null | undefined): string {
   return FILE_NAME[resolveDocLang(lang)][kind];
-}
-
-export async function cvToDocx(cv: TailoredCv, lang?: string | null): Promise<Buffer> {
-  const l = CV_LABELS[resolveDocLang(lang)];
-  const doc = new Document({
-    sections: [
-      {
-        children: [
-          new Paragraph({ text: cv.name, heading: HeadingLevel.TITLE }),
-          new Paragraph({ text: cv.title, heading: HeadingLevel.HEADING_2 }),
-          new Paragraph({ text: cv.contact }),
-          new Paragraph({ text: '' }),
-          new Paragraph({ text: l.summary, heading: HeadingLevel.HEADING_3 }),
-          new Paragraph({ text: cv.summary }),
-          new Paragraph({ text: '' }),
-          new Paragraph({ text: l.skills, heading: HeadingLevel.HEADING_3 }),
-          new Paragraph({ text: cv.skills.join(' · ') }),
-          new Paragraph({ text: '' }),
-          new Paragraph({ text: l.experience, heading: HeadingLevel.HEADING_3 }),
-          ...cv.experience.flatMap((exp) => [
-            new Paragraph({ children: [new TextRun({ text: exp.role, bold: true })] }),
-            new Paragraph({ children: [new TextRun({ text: exp.dates, italics: true })] }),
-            ...exp.bullets.map((b) => new Paragraph({ text: `• ${b}` })),
-            new Paragraph({ text: '' }),
-          ]),
-          new Paragraph({ text: l.education, heading: HeadingLevel.HEADING_3 }),
-          new Paragraph({ text: cv.education }),
-          new Paragraph({ text: '' }),
-          new Paragraph({ text: l.certifications, heading: HeadingLevel.HEADING_3 }),
-          new Paragraph({ text: cv.certifications }),
-          new Paragraph({ text: '' }),
-          new Paragraph({ text: l.languages, heading: HeadingLevel.HEADING_3 }),
-          new Paragraph({ text: cv.languages }),
-        ],
-      },
-    ],
-  });
-  return Packer.toBuffer(doc);
-}
-
-export async function coverLetterToDocx(letter: CoverLetter, vacancyTitle: string, company: string): Promise<Buffer> {
-  const doc = new Document({
-    sections: [
-      {
-        children: [
-          new Paragraph({ text: `${vacancyTitle} — ${company}`, heading: HeadingLevel.HEADING_2 }),
-          new Paragraph({ text: '' }),
-          new Paragraph({ text: letter.greeting }),
-          new Paragraph({ text: '' }),
-          ...letter.body.map((p) => new Paragraph({ text: p })),
-          new Paragraph({ text: '' }),
-          new Paragraph({ text: letter.closing }),
-        ],
-      },
-    ],
-  });
-  return Packer.toBuffer(doc);
 }
 
 export function escapeHtml(s: string): string {
@@ -139,32 +78,6 @@ const PDF_BASE_STYLE = `
   .exp-dates{color:#74879A;font-size:12px;font-style:italic}
   ul{margin:4px 0;padding-left:18px}
 `;
-
-export async function cvToPdf(cv: TailoredCv, lang?: string | null): Promise<Buffer> {
-  const l = CV_LABELS[resolveDocLang(lang)];
-  const html = `<html><head><meta charset="utf-8"><style>${PDF_BASE_STYLE}</style></head><body>
-    <h1>${escapeHtml(cv.name)}</h1>
-    <div class="meta">${escapeHtml(cv.title)}</div>
-    <div class="meta">${escapeHtml(cv.contact)}</div>
-    <h2>${l.summary}</h2>
-    <p>${escapeHtml(cv.summary)}</p>
-    <h2>${l.skills}</h2>
-    <p>${escapeHtml(cv.skills.join(' · '))}</p>
-    <h2>${l.experience}</h2>
-    ${cv.experience
-      .map(
-        (exp) =>
-          `<div class="exp-role">${escapeHtml(exp.role)}</div><div class="exp-dates">${escapeHtml(exp.dates)}</div><ul>${exp.bullets
-            .map((b) => `<li>${escapeHtml(b)}</li>`)
-            .join('')}</ul>`,
-      )
-      .join('')}
-    <h2>${l.education}</h2><p>${escapeHtml(cv.education)}</p>
-    <h2>${l.certifications}</h2><p>${escapeHtml(cv.certifications)}</p>
-    <h2>${l.languages}</h2><p>${escapeHtml(cv.languages)}</p>
-  </body></html>`;
-  return htmlToPdf(html);
-}
 
 export async function reportToPdf(vacancyTitle: string, company: string, summaryHtml: string, lang?: string | null): Promise<Buffer> {
   const title = REPORT_LABELS[resolveDocLang(lang)].title;
