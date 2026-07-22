@@ -10,6 +10,16 @@ const EVENT_METADATA_KEYS: Record<string, string[]> = {
   checkout_started: ['package', 'isUpgrade'],
   payment_completed: ['package'],
   cv_change_copied: ['changeType', 'priority'],
+  // Anonymous-access-restoration events — presence/count only, no metadata.
+  active_analysis_restored: [],
+  resume_analysis_clicked: [],
+  new_analysis_warning_shown: [],
+  new_analysis_confirmed: [],
+  new_analysis_cancelled: [],
+  entitlement_restored: [],
+  recovery_link_used: [],
+  analysis_expired: [],
+  duplicate_payment_prevented: [],
 };
 
 function sanitizeMetadata(name: string, raw: unknown): Record<string, string | number | boolean> {

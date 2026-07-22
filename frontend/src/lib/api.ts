@@ -3,6 +3,11 @@ const BASE = '/api';
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     ...init,
+    // Required for the pm_session HttpOnly cookie to be sent/received — this is what lets the
+    // backend recognize "this browser" across requests without any registration. Same-origin dev
+    // (Vite's /api proxy) already worked without this; 'include' also covers a deployed frontend/
+    // backend split across origins, paired with the backend's cors({ credentials: true }).
+    credentials: 'include',
     headers: init?.body && !(init.body instanceof FormData) ? { 'Content-Type': 'application/json', ...init.headers } : init?.headers,
   });
   const data = await res.json().catch(() => ({}));
@@ -74,6 +79,8 @@ export interface AnalysisInfo {
   expiresAt: string;
   ownedPackage: number;
   selfAttestedGapConfirmed: boolean | null;
+  paidAt: string | null;
+  entitlementExpiresAt: string | null;
 }
 
 export function getAnalysis(id: string) {
@@ -280,6 +287,31 @@ export function getOrder(id: string) {
 
 export function simulatePayment(id: string, outcome: 'success' | 'fail') {
   return req<{ status: string }>(`/orders/${id}/simulate`, { method: 'POST', body: JSON.stringify({ outcome }) });
+}
+
+// ---------- session (anonymous-browser access recovery, no registration) ----------
+
+export interface SessionCurrent {
+  hasAnalysis: boolean;
+  analysisId?: string;
+  status?: string;
+  failReason?: string | null;
+  ownedPackage?: number;
+  paidAt?: string | null;
+  entitlementExpiresAt?: string | null;
+  entitlementActive?: boolean;
+}
+
+/** Reads (never creates) the calling browser's most recent analysis, if any — drives the homepage
+ * resume card and any "is my paid access still valid" check. Never returns CV/vacancy content. */
+export function getCurrentSession() {
+  return req<SessionCurrent>('/session/current');
+}
+
+// ---------- recovery (email-link based access restoration; see backend lib/recovery.ts) ----------
+
+export function consumeRecoveryToken(token: string) {
+  return req<{ analysisId: string }>('/recovery/consume', { method: 'POST', body: JSON.stringify({ token }) });
 }
 
 // ---------- suggestions (admin read only — public submission widget was removed; see lib/adminApi.ts) ----------

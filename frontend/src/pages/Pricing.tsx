@@ -50,7 +50,7 @@ export default function Pricing() {
 
   return (
     <div>
-      <AppHeader vacancyTitle={info?.vacancyTitle} vacancyCompany={info?.vacancyCompany} vacancyLocation={info?.vacancyLocation} />
+      <AppHeader vacancyTitle={info?.vacancyTitle} vacancyCompany={info?.vacancyCompany} vacancyLocation={info?.vacancyLocation} analysisId={id} />
       <div className="max-w-[880px] mx-auto px-6 py-10">
         <div className="text-center max-w-[620px] mx-auto mb-9">
           <h1 className="font-display font-semibold text-[30px] mb-2">{t.pricing.title}</h1>

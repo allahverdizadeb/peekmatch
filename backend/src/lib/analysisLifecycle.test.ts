@@ -4,15 +4,32 @@ import { resolveAnalysis } from './analysisLifecycle.js';
 
 const HOUR = 60 * 60 * 1000;
 const createdIds: string[] = [];
+const createdSessionIds: string[] = [];
 
-async function makeAnalysis(data: { expiresAt: Date; deletedAt?: Date | null }) {
-  const row = await prisma.analysis.create({ data: { expiresAt: data.expiresAt, deletedAt: data.deletedAt ?? null } });
+async function makeAnalysis(data: { expiresAt: Date; deletedAt?: Date | null; anonymousSessionId?: string | null; paidAt?: Date | null }) {
+  const row = await prisma.analysis.create({
+    data: {
+      expiresAt: data.expiresAt,
+      deletedAt: data.deletedAt ?? null,
+      anonymousSessionId: data.anonymousSessionId ?? null,
+      paidAt: data.paidAt ?? null,
+    },
+  });
   createdIds.push(row.id);
+  return row;
+}
+
+async function makeSession() {
+  const row = await prisma.anonymousSession.create({
+    data: { tokenHash: `test-${Math.random()}`, expiresAt: new Date(Date.now() + 30 * 24 * HOUR) },
+  });
+  createdSessionIds.push(row.id);
   return row;
 }
 
 afterAll(async () => {
   await prisma.analysis.deleteMany({ where: { id: { in: createdIds } } });
+  await prisma.anonymousSession.deleteMany({ where: { id: { in: createdSessionIds } } });
   await prisma.$disconnect();
 });
 
@@ -51,6 +68,69 @@ describe('resolveAnalysis', () => {
     const row = await makeAnalysis({ expiresAt: new Date(Date.now() - 1) });
     const resolved = await resolveAnalysis(row.id);
     expect(resolved.kind).toBe('expired');
+  });
+});
+
+describe('resolveAnalysis ownership (IDOR fix)', () => {
+  it('returns ok for the owning session', async () => {
+    const session = await makeSession();
+    const row = await makeAnalysis({ expiresAt: new Date(Date.now() + 24 * HOUR), anonymousSessionId: session.id });
+    const resolved = await resolveAnalysis(row.id, session.id);
+    expect(resolved.kind).toBe('ok');
+  });
+
+  it('returns forbidden for a different session — the core IDOR fix', async () => {
+    const owner = await makeSession();
+    const attacker = await makeSession();
+    const row = await makeAnalysis({ expiresAt: new Date(Date.now() + 24 * HOUR), anonymousSessionId: owner.id });
+    const resolved = await resolveAnalysis(row.id, attacker.id);
+    expect(resolved.kind).toBe('forbidden');
+  });
+
+  it('returns forbidden when no session is supplied at all for an owned analysis', async () => {
+    const owner = await makeSession();
+    const row = await makeAnalysis({ expiresAt: new Date(Date.now() + 24 * HOUR), anonymousSessionId: owner.id });
+    const resolved = await resolveAnalysis(row.id, undefined);
+    expect(resolved.kind).toBe('forbidden');
+  });
+
+  it('treats a null anonymousSessionId (pre-migration row) as ownerless/public regardless of caller', async () => {
+    const row = await makeAnalysis({ expiresAt: new Date(Date.now() + 24 * HOUR), anonymousSessionId: null });
+    const someone = await makeSession();
+    expect((await resolveAnalysis(row.id, someone.id)).kind).toBe('ok');
+    expect((await resolveAnalysis(row.id, undefined)).kind).toBe('ok');
+  });
+
+  it('forbidden takes priority over deleted/expired — a non-owner cannot distinguish lifecycle state', async () => {
+    const owner = await makeSession();
+    const attacker = await makeSession();
+    const row = await makeAnalysis({
+      expiresAt: new Date(Date.now() - HOUR),
+      deletedAt: new Date(),
+      anonymousSessionId: owner.id,
+    });
+    const resolved = await resolveAnalysis(row.id, attacker.id);
+    expect(resolved.kind).toBe('forbidden');
+  });
+});
+
+describe('resolveAnalysis entitlement_expired vs plain expired', () => {
+  it('an expired analysis that was never paid resolves to plain "expired"', async () => {
+    const row = await makeAnalysis({ expiresAt: new Date(Date.now() - HOUR), paidAt: null });
+    const resolved = await resolveAnalysis(row.id);
+    expect(resolved.kind).toBe('expired');
+  });
+
+  it('an expired analysis that WAS paid resolves to "entitlement_expired" — distinct privacy-specific message', async () => {
+    const row = await makeAnalysis({ expiresAt: new Date(Date.now() - HOUR), paidAt: new Date(Date.now() - 25 * HOUR) });
+    const resolved = await resolveAnalysis(row.id);
+    expect(resolved.kind).toBe('entitlement_expired');
+  });
+
+  it('a still-active paid analysis resolves ok, not entitlement_expired', async () => {
+    const row = await makeAnalysis({ expiresAt: new Date(Date.now() + HOUR), paidAt: new Date() });
+    const resolved = await resolveAnalysis(row.id);
+    expect(resolved.kind).toBe('ok');
   });
 });
 

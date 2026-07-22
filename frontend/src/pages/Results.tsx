@@ -50,7 +50,7 @@ export default function Results() {
   const [info, setInfo] = useState<AnalysisInfo | null>(null);
   const [result, setResult] = useState<FreeResult | null>(null);
   const [error, setError] = useState('');
-  const [lifecycleCode, setLifecycleCode] = useState<'expired' | 'deleted' | null>(null);
+  const [lifecycleCode, setLifecycleCode] = useState<'expired' | 'deleted' | 'entitlement_expired' | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
   useEffect(() => {
@@ -61,7 +61,7 @@ export default function Results() {
         setResult(r);
       })
       .catch((err) => {
-        if (err.status === 410 && (err.code === 'expired' || err.code === 'deleted')) {
+        if (err.status === 410 && (err.code === 'expired' || err.code === 'deleted' || err.code === 'entitlement_expired')) {
           setLifecycleCode(err.code);
         } else {
           setError(err.message || t.results.errorFallback);
@@ -110,7 +110,7 @@ export default function Results() {
 
   return (
     <div>
-      <AppHeader vacancyTitle={info.vacancyTitle} vacancyCompany={info.vacancyCompany} vacancyLocation={info.vacancyLocation} />
+      <AppHeader vacancyTitle={info.vacancyTitle} vacancyCompany={info.vacancyCompany} vacancyLocation={info.vacancyLocation} analysisId={id} />
       <div className="max-w-[1160px] mx-auto px-6 py-9">
         <LanguageMismatchNotice analysisLanguage={info.outputLanguage} uiLang={uiLang} />
         <div className="flex flex-wrap items-start justify-between gap-3 mb-1">

@@ -1,9 +1,10 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Upload, FileText, Check, Link as LinkIcon, AlertTriangle, Loader2, Type } from 'lucide-react';
 import { MarketingHeader, Footer } from '../components/MarketingChrome';
 import { Button } from '../components/ui';
 import { Stepper } from '../components/Stepper';
+import { NewAnalysisConfirmModal } from '../components/NewAnalysisConfirmModal';
 import {
   createAnalysisFromFile,
   createAnalysisFromText,
@@ -14,7 +15,25 @@ import {
   type VacancyPreview,
 } from '../lib/api';
 import { useLanguage } from '../lib/i18n/LanguageContext';
+import { useCurrentSession } from '../lib/useCurrentSession';
+import { track } from '../lib/analytics';
 import type { Lang } from '../lib/i18n/locales';
+
+/** Where "cancel" on the new-analysis warning sends the user back to — their existing analysis,
+ * routed by its own state rather than always the free results page. */
+function existingAnalysisPath(state: ReturnType<typeof useCurrentSession>['state']): string | null {
+  switch (state.kind) {
+    case 'processing':
+    case 'failed':
+      return `/processing/${state.analysisId}`;
+    case 'unpaidAnalysis':
+      return `/results/${state.analysisId}`;
+    case 'paidActiveAnalysis':
+      return `/workspace/${state.analysisId}/report`;
+    default:
+      return null;
+  }
+}
 
 const MIN_CV_TEXT = 2000;
 const MIN_VACANCY_TEXT = 3000;
@@ -32,6 +51,20 @@ export default function AnalysisForm() {
   const navigate = useNavigate();
   const { t, lang: uiLang } = useLanguage();
   const fileInput = useRef<HTMLInputElement>(null);
+
+  // Guards against silently orphaning an already-active analysis: if this browser's session
+  // already owns a real (non-draft) analysis, warn before letting the CV-upload flow below create
+  // a second one — creating a new analysis doesn't delete the old row, but it would immediately
+  // make the old one unreachable from the homepage resume card (which only ever surfaces the most
+  // recent one), so from the user's perspective it reads as "replaced."
+  const { state: existingSession } = useCurrentSession();
+  const existingPath = existingAnalysisPath(existingSession);
+  const [newAnalysisWarningDismissed, setNewAnalysisWarningDismissed] = useState(false);
+  const showNewAnalysisWarning = existingPath !== null && !newAnalysisWarningDismissed;
+
+  useEffect(() => {
+    if (showNewAnalysisWarning) track({ name: 'new_analysis_warning_shown' });
+  }, [showNewAnalysisWarning]);
 
   const [analysisId, setAnalysisId] = useState<string | null>(null);
 
@@ -180,6 +213,23 @@ export default function AnalysisForm() {
       setSubmitError(err.message || t.analysisForm.errSubmitGeneric);
       setSubmitting(false);
     }
+  }
+
+  // Block the upload wizard entirely behind the warning until it's explicitly resolved — showing
+  // the form underneath (even disabled) risks a race where an upload starts before the modal is
+  // dismissed. Cancel sends the user back to their existing analysis instead of silently landing
+  // them back on this same blocked screen.
+  if (showNewAnalysisWarning && 'analysisId' in existingSession && existingPath) {
+    return (
+      <div>
+        <MarketingHeader />
+        <NewAnalysisConfirmModal
+          analysisId={existingSession.analysisId}
+          onCancel={() => navigate(existingPath)}
+          onConfirmed={() => setNewAnalysisWarningDismissed(true)}
+        />
+      </div>
+    );
   }
 
   return (

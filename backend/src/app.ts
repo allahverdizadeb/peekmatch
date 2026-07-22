@@ -1,19 +1,30 @@
 import express from 'express';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import { analysesRouter } from './routes/analyses.js';
 import { ordersRouter } from './routes/orders.js';
 import { suggestionsRouter } from './routes/suggestions.js';
 import { eventsRouter } from './routes/events.js';
+import { sessionRouter } from './routes/session.js';
+import { recoveryRouter } from './routes/recovery.js';
+import { attachSession } from './middleware/anonymousSession.js';
 import { aiConfigured } from './lib/ai.js';
 
 /** The Express app itself, separate from index.ts's .listen()/cron wiring, so tests can exercise
  * real HTTP routes (via supertest) without a live server or the cleanup interval running. */
 export const app = express();
 
-app.use(cors());
+// credentials: true (+ a non-wildcard origin reflection) is required for the pm_session cookie to
+// reliably flow cross-origin — same-origin dev already worked without this via Vite's proxy, but a
+// deployed frontend/backend on different origins would silently drop the cookie without it.
+app.use(cors({ origin: true, credentials: true }));
+app.use(cookieParser());
 app.use(express.json({ limit: '2mb' }));
+app.use(attachSession);
 
 app.get('/api/health', (_req, res) => res.json({ ok: true, aiConfigured: aiConfigured() }));
+app.use('/api/session', sessionRouter);
+app.use('/api/recovery', recoveryRouter);
 app.use('/api/analyses', analysesRouter);
 app.use('/api/orders', ordersRouter);
 app.use('/api/suggestions', suggestionsRouter);

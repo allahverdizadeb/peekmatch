@@ -488,11 +488,15 @@ export const az = {
     realVsVisibleTitle: 'Real uyğunluq vs CV-də görünən',
     realLabel: 'Real uyğunluğunuz',
     visibleLabel: 'CV-də görünən uyğunluq',
-    weightTitle: 'Tələb çəkiləri',
-    weightSubtitle: 'Hər tələb eyni dəyərdə deyil — uyğunluq faizi çəkilərlə hesablanır.',
-    weightMultipliers: { kritik: '×5', əsas: '×3', üstünlük: '×1' },
+    weightTitle: 'Tələblərin vaciblik səviyyəsi',
+    weightSubtitle: 'Vakansiyadakı hər tələbin işə qəbul qərarı üçün nə dərəcədə vacib olduğunu göstərir.',
+    weightLevelLabel: {
+      kritik: 'Kritik — mütləq tələb olunur',
+      əsas: 'Əsas — vacibdir',
+      üstünlük: 'Üstünlük — əlavə üstünlük yaradır',
+    },
 
-    reqMatrixTitle: 'Tələb matrisi',
+    reqMatrixTitle: 'Vakansiyanın tələbləri',
     filterAll: 'Hamısı',
     filterMet: 'Uyğundur',
     filterPartial: 'Qismən',
@@ -514,16 +518,12 @@ export const az = {
       üstünlük: 'Üstünlük',
     },
 
-    weakPresentationTitle: 'CV-də zəif təqdim olunan təcrübələr',
+    weakPresentationTitle: 'CV-də aşkar edilən səhvliklər',
     original: 'Orijinal',
     problem: 'Problem',
     suggestedDirection: 'Tövsiyə olunan istiqamət',
     weakPresentationNote: 'Platforma CV-də olmayan təcrübə və nəticələr əlavə etmir.',
-    improvementTitle: 'Təkmilləşdirmə imkanları',
-
-    reportFileName: 'Uyğunluq_Hesabatı.pdf',
-    pdfReportLabel: 'PDF hesabat',
-    downloadCta: 'Yüklə',
+    improvementTitle: 'Daha yaxşı yazılmalı olan hissələr',
 
     cvGeneratingHints: [
       'CV-niz vakansiya ilə müqayisə edilir...',
@@ -615,7 +615,7 @@ export const az = {
         insufficient_info: 'Bu barədə CV-nizdə daha aydın məlumat verin.',
       },
       advancedToggleLabel: 'Ətraflı uyğunluq xəritəsi',
-      advancedToggleSubtitle: 'Bütün tələbləri əhəmiyyət və status üzrə cədvəl kimi görün.',
+      advancedToggleSubtitle: 'Vakansiyadakı bütün tələbləri və CV-nizin hər bir tələbə nə dərəcədə uyğun olduğunu görün.',
     },
     cvPlanSummaryTitle: 'Dəyişiklik xülasəsi',
     interviewSummaryTitle: 'Sual xülasəsi',
@@ -629,10 +629,41 @@ export const az = {
     expiredBody: 'Məxfilik məqsədilə CV və nəticələr avtomatik silinib.',
     deletedTitle: 'Məlumatlarınız silindi',
     deletedBody: 'CV və analiz nəticələriniz artıq əlçatan deyil.',
+    entitlementExpiredTitle: 'Giriş müddəti başa çatıb',
+    entitlementExpiredBody: 'Bu analizin 24 saatlıq giriş müddəti başa çatıb və məlumatlar məxfilik qaydalarına uyğun silinib.',
     newAnalysisCta: 'Yeni analiz başlat',
     deleteConfirmTitle: 'Bütün məlumatlarınızı silmək istəyirsiniz?',
     deleteConfirmBody: 'CV, vakansiya mətni, analiz nəticələri və yaradılmış sənədlər silinəcək. Bu əməliyyatı geri qaytarmaq mümkün deyil.',
     deleteConfirmCta: 'Məlumatlarımı sil',
+    cancelCta: 'Ləğv et',
+  },
+
+  resumeCard: {
+    // Paid, entitlement-active — exact required copy.
+    paidTitle: 'Son analiziniz hazırdır',
+    paidBody: 'Bu analiz və açdığınız funksiyalar 24 saat ərzində əlçatandır.',
+    paidCta: 'Analizə davam et',
+    expiresInPrefix: 'Giriş müddəti:',
+    expiresInHours: 'təxminən {hours} saat',
+    expiresInUnderHour: '1 saatdan az',
+    // Still processing — exact required copy.
+    processingTitle: 'Analiziniz hazırlanır',
+    processingBody: 'Hazır olan kimi nəticələr avtomatik əlçatan olacaq.',
+    processingCta: 'Analizə qayıt',
+    // Done but not purchased yet — not covered by the original copy brief, written to match its tone.
+    unpaidTitle: 'Analiziniz hazırdır',
+    unpaidBody: 'Pulsuz nəticələrinizə yenidən baxa bilərsiniz.',
+    unpaidCta: 'Nəticələrə bax',
+    // Last analysis failed — not covered by the original copy brief, written to match its tone.
+    failedTitle: 'Son analiziniz tamamlanmadı',
+    failedBody: 'Nəticəyə baxaraq yenidən cəhd edə və ya yeni analiz başlada bilərsiniz.',
+    failedCta: 'Bax',
+  },
+
+  newAnalysisConfirm: {
+    title: 'Yeni analizə başlamaq istəyirsiniz?',
+    body: 'Yeni CV yüklədikdə hazırkı analiziniz və bu analiz üçün açdığınız funksiyalar silinəcək. Mövcud paket yeni analizə keçirilməyəcək.',
+    confirmCta: 'Yeni analizə başla',
     cancelCta: 'Ləğv et',
   },
 

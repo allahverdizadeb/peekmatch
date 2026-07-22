@@ -15,7 +15,6 @@ import {
   type InterviewPrep,
   type SelfAttestedGap,
 } from '../lib/ai.js';
-import { reportToPdf, getReportLabels, docFileName, escapeHtml } from '../lib/docGen.js';
 import { highestOwnedPackage, ownedPackages, unlocksApplication, unlocksInterview } from '../lib/pricing.js';
 import { resolveAnalysis, respondUnresolved, type AnalysisRow } from '../lib/analysisLifecycle.js';
 import { sanitizeCvChangePlan, computeCvChangesSummary, computeInterviewRisksCount } from '../lib/scoring.js';
@@ -99,6 +98,7 @@ analysesRouter.post('/', upload.single('cvFile'), async (req, res) => {
     const analysis = await prisma.analysis.create({
       data: {
         expiresAt: new Date(Date.now() + RETENTION_MS),
+        anonymousSessionId: req.sessionId,
         cvMode,
         cvText,
         cvFileName,
@@ -120,7 +120,7 @@ analysesRouter.post('/', upload.single('cvFile'), async (req, res) => {
 
 // ---------- vacancy: URL extraction ----------
 analysesRouter.post('/:id/vacancy/url', async (req, res) => {
-  const resolved = await resolveAnalysis(req.params.id);
+  const resolved = await resolveAnalysis(req.params.id, req.sessionId);
   if (resolved.kind !== 'ok') return respondUnresolved(res, resolved);
   const analysis = resolved.analysis;
   const url = (req.body.url as string) || '';
@@ -155,7 +155,7 @@ analysesRouter.post('/:id/vacancy/url', async (req, res) => {
 
 // ---------- vacancy: manual text fallback ----------
 analysesRouter.post('/:id/vacancy/manual', async (req, res) => {
-  const resolved = await resolveAnalysis(req.params.id);
+  const resolved = await resolveAnalysis(req.params.id, req.sessionId);
   if (resolved.kind !== 'ok') return respondUnresolved(res, resolved);
   const analysis = resolved.analysis;
   const text = (req.body.text as string) || '';
@@ -180,7 +180,7 @@ function resolveOutputLanguage(value: unknown): string {
 }
 
 analysesRouter.patch('/:id/settings', async (req, res) => {
-  const resolved = await resolveAnalysis(req.params.id);
+  const resolved = await resolveAnalysis(req.params.id, req.sessionId);
   if (resolved.kind !== 'ok') return respondUnresolved(res, resolved);
   const data: { outputLanguage?: string; consent?: boolean } = {};
   if (typeof req.body.outputLanguage !== 'undefined') data.outputLanguage = resolveOutputLanguage(req.body.outputLanguage);
@@ -191,7 +191,7 @@ analysesRouter.patch('/:id/settings', async (req, res) => {
 
 // ---------- self-attestation ("do you actually have this?" prompt, Truth Lock gate) ----------
 analysesRouter.patch('/:id/self-attest', async (req, res) => {
-  const resolved = await resolveAnalysis(req.params.id);
+  const resolved = await resolveAnalysis(req.params.id, req.sessionId);
   if (resolved.kind !== 'ok') return respondUnresolved(res, resolved);
   if (typeof req.body.confirmed !== 'boolean') return res.status(400).json({ error: 'Yanlış dəyər.' });
   const details = typeof req.body.details === 'string' ? req.body.details.slice(0, 2000) : null;
@@ -212,7 +212,7 @@ analysesRouter.patch('/:id/self-attest', async (req, res) => {
 
 // ---------- delete (user-triggered, immediate) ----------
 analysesRouter.delete('/:id', async (req, res) => {
-  const resolved = await resolveAnalysis(req.params.id);
+  const resolved = await resolveAnalysis(req.params.id, req.sessionId);
   if (resolved.kind !== 'ok') return respondUnresolved(res, resolved);
   await prisma.analysis.update({
     where: { id: resolved.analysis.id },
@@ -242,7 +242,7 @@ analysesRouter.delete('/:id', async (req, res) => {
 
 // ---------- start processing ----------
 analysesRouter.post('/:id/start', async (req, res) => {
-  const resolved = await resolveAnalysis(req.params.id);
+  const resolved = await resolveAnalysis(req.params.id, req.sessionId);
   if (resolved.kind !== 'ok') return respondUnresolved(res, resolved);
   const analysis = resolved.analysis;
   if (!analysis.cvText || !analysis.vacancyText || !analysis.consent) {
@@ -343,14 +343,14 @@ function pickExampleCard(cards: CvChangeCard[]): CvChangeCard | null {
 
 // ---------- status / result ----------
 analysesRouter.get('/:id/status', async (req, res) => {
-  const resolved = await resolveAnalysis(req.params.id);
+  const resolved = await resolveAnalysis(req.params.id, req.sessionId);
   if (resolved.kind !== 'ok') return respondUnresolved(res, resolved);
   const analysis = resolved.analysis;
   res.json({ status: analysis.status, procStage: analysis.procStage, failReason: analysis.failReason });
 });
 
 analysesRouter.get('/:id', async (req, res) => {
-  const resolved = await resolveAnalysis(req.params.id);
+  const resolved = await resolveAnalysis(req.params.id, req.sessionId);
   if (resolved.kind !== 'ok') return respondUnresolved(res, resolved);
   const analysis = resolved.analysis;
   const owned = highestOwnedPackage(await ownedPackages(analysis.id));
@@ -370,11 +370,13 @@ analysesRouter.get('/:id', async (req, res) => {
     expiresAt: analysis.expiresAt,
     ownedPackage: owned,
     selfAttestedGapConfirmed: analysis.selfAttestedGapConfirmed,
+    paidAt: analysis.paidAt,
+    entitlementExpiresAt: analysis.entitlementExpiresAt,
   });
 });
 
 analysesRouter.get('/:id/result', async (req, res) => {
-  const resolved = await resolveAnalysis(req.params.id);
+  const resolved = await resolveAnalysis(req.params.id, req.sessionId);
   if (resolved.kind !== 'ok') return respondUnresolved(res, resolved);
   const analysis = resolved.analysis;
   if (analysis.status !== 'done' || !analysis.resultJson) {
@@ -436,7 +438,7 @@ analysesRouter.get('/:id/result', async (req, res) => {
 
 // ---------- paid: full report ----------
 analysesRouter.get('/:id/report', async (req, res) => {
-  const resolved = await resolveAnalysis(req.params.id);
+  const resolved = await resolveAnalysis(req.params.id, req.sessionId);
   if (resolved.kind !== 'ok') return respondUnresolved(res, resolved);
   const analysis = resolved.analysis;
   const owned = highestOwnedPackage(await ownedPackages(analysis.id));
@@ -462,35 +464,9 @@ analysesRouter.get('/:id/report', async (req, res) => {
   });
 });
 
-analysesRouter.get('/:id/report/download', async (req, res) => {
-  const resolved = await resolveAnalysis(req.params.id);
-  if (resolved.kind !== 'ok') return respondUnresolved(res, resolved);
-  const analysis = resolved.analysis;
-  const owned = highestOwnedPackage(await ownedPackages(analysis.id));
-  if (!unlocksApplication(owned)) return res.status(402).json({ error: 'Bu paket alınmayıb.' });
-  if (!analysis.resultJson) return res.status(409).json({ error: 'Analiz hazır deyil.' });
-  const full: MatchResult = JSON.parse(analysis.resultJson);
-  const labels = getReportLabels(analysis.outputLanguage);
-  const rows = full.requirements
-    .map(
-      (r) =>
-        `<tr><td>${escapeHtml(r.title)}</td><td>${escapeHtml(r.category)}</td><td>${escapeHtml(labels.importanceLabel[r.importance] || r.importance)}</td><td>${escapeHtml(labels.statusLabel[r.status] || r.status)}</td><td>${escapeHtml(r.evidence) || '—'}</td></tr>`,
-    )
-    .join('');
-  const html = `<h2>${labels.compatibilityLine(full.compatibility, full.mainRequirementsMet, full.mainRequirementsTotal)}</h2>
-    <p>${escapeHtml(full.recommendationStatus)}</p>
-    <table border="1" cellpadding="6" style="border-collapse:collapse;width:100%;font-size:11px">
-      <tr>${labels.tableHeaders.map((h) => `<th>${h}</th>`).join('')}</tr>${rows}
-    </table>`;
-  const pdf = await reportToPdf(analysis.vacancyTitle || 'Vakansiya', analysis.vacancyCompany || '', html, analysis.outputLanguage);
-  res.setHeader('Content-Type', 'application/pdf');
-  res.setHeader('Content-Disposition', `attachment; filename="${docFileName('report', analysis.outputLanguage)}.pdf"`);
-  res.send(pdf);
-});
-
 // ---------- paid: CV Change Plan ----------
 analysesRouter.get('/:id/cv-plan', async (req, res) => {
-  const resolved = await resolveAnalysis(req.params.id);
+  const resolved = await resolveAnalysis(req.params.id, req.sessionId);
   if (resolved.kind !== 'ok') return respondUnresolved(res, resolved);
   const analysis = resolved.analysis;
   const owned = highestOwnedPackage(await ownedPackages(analysis.id));
@@ -559,7 +535,7 @@ async function runInterviewPrepGeneration(analysisId: string): Promise<void> {
 // Starts generation (idempotently — see above) and returns immediately with the current status.
 // Never blocks on the AI call, unlike the old GET /:id/interview.
 analysesRouter.post('/:id/interview/generate', async (req, res) => {
-  const resolved = await resolveAnalysis(req.params.id);
+  const resolved = await resolveAnalysis(req.params.id, req.sessionId);
   if (resolved.kind !== 'ok') return respondUnresolved(res, resolved);
   const analysis = resolved.analysis;
   const owned = highestOwnedPackage(await ownedPackages(analysis.id));
@@ -579,7 +555,7 @@ analysesRouter.post('/:id/interview/generate', async (req, res) => {
 
 // Lightweight poll target — no DB write, no AI call, just the current persisted status.
 analysesRouter.get('/:id/interview/status', async (req, res) => {
-  const resolved = await resolveAnalysis(req.params.id);
+  const resolved = await resolveAnalysis(req.params.id, req.sessionId);
   if (resolved.kind !== 'ok') return respondUnresolved(res, resolved);
   const analysis = resolved.analysis;
   const owned = highestOwnedPackage(await ownedPackages(analysis.id));
@@ -590,7 +566,7 @@ analysesRouter.get('/:id/interview/status', async (req, res) => {
 // Returns the finished result only — callers should poll /status until 'done' first (an existing
 // completed Playbook still returns immediately here with no extra work, same as before).
 analysesRouter.get('/:id/interview', async (req, res) => {
-  const resolved = await resolveAnalysis(req.params.id);
+  const resolved = await resolveAnalysis(req.params.id, req.sessionId);
   if (resolved.kind !== 'ok') return respondUnresolved(res, resolved);
   const analysis = resolved.analysis;
   const owned = highestOwnedPackage(await ownedPackages(analysis.id));
@@ -603,7 +579,7 @@ analysesRouter.get('/:id/interview', async (req, res) => {
 // Pure derived view — no AI call, just cross-references requirement titles already present across
 // resultJson / cvChangePlanJson / interviewPrepJson (see lib/evidenceChain.ts).
 analysesRouter.get('/:id/evidence-chain', async (req, res) => {
-  const resolved = await resolveAnalysis(req.params.id);
+  const resolved = await resolveAnalysis(req.params.id, req.sessionId);
   if (resolved.kind !== 'ok') return respondUnresolved(res, resolved);
   const analysis = resolved.analysis;
   const owned = highestOwnedPackage(await ownedPackages(analysis.id));

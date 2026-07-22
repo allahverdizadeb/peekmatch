@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { prisma } from '../db.js';
 import { PACKAGES, highestOwnedPackage, ownedPackages, upgradePriceUsd, type PackageId } from '../lib/pricing.js';
 import { resolveAnalysis, respondUnresolved } from '../lib/analysisLifecycle.js';
+import { ENTITLEMENT_WINDOW_MS } from '../lib/entitlement.js';
 
 export const ordersRouter = Router();
 
@@ -10,7 +11,7 @@ ordersRouter.post('/', async (req, res) => {
   const pkg = Number(req.body.package) as PackageId;
   if (!PACKAGES[pkg]) return res.status(400).json({ error: 'Naməlum paket.' });
 
-  const resolved = await resolveAnalysis(analysisId);
+  const resolved = await resolveAnalysis(analysisId, req.sessionId);
   if (resolved.kind !== 'ok') return respondUnresolved(res, resolved);
   const analysis = resolved.analysis;
   if (analysis.status !== 'done') {
@@ -35,9 +36,29 @@ ordersRouter.post('/', async (req, res) => {
   });
 });
 
-ordersRouter.get('/:id', async (req, res) => {
+/** Loads an order and verifies the CALLER's session owns the analysis it belongs to — same IDOR
+ * protection as resolveAnalysis(), applied here too since an order id is a second UUID that could
+ * otherwise be guessed/enumerated independently of its analysis id. Returns null (after already
+ * responding 404) when not found or not owned — deliberately the same generic 404 for both, for
+ * the same reason resolveAnalysis() folds 'forbidden' into 'not_found'. */
+async function loadOwnedOrder(req: import('express').Request<{ id: string }>, res: import('express').Response) {
   const order = await prisma.order.findUnique({ where: { id: req.params.id } });
-  if (!order) return res.status(404).json({ error: 'Sifariş tapılmadı.' });
+  if (!order) {
+    res.status(404).json({ error: 'Sifariş tapılmadı.' });
+    return null;
+  }
+  const analysis = await prisma.analysis.findUnique({ where: { id: order.analysisId } });
+  if (!analysis || (analysis.anonymousSessionId && analysis.anonymousSessionId !== req.sessionId)) {
+    res.status(404).json({ error: 'Sifariş tapılmadı.' });
+    return null;
+  }
+  return { order, analysis };
+}
+
+ordersRouter.get('/:id', async (req, res) => {
+  const loaded = await loadOwnedOrder(req, res);
+  if (!loaded) return;
+  const { order } = loaded;
   res.json({ id: order.id, analysisId: order.analysisId, package: order.package, amountUsd: order.amountUsd, status: order.status });
 });
 
@@ -45,12 +66,15 @@ ordersRouter.get('/:id', async (req, res) => {
 // (real order records, real unlock logic), but the actual charge step is simulated —
 // no live payment provider is wired up.
 ordersRouter.post('/:id/simulate', async (req, res) => {
-  const order = await prisma.order.findUnique({ where: { id: req.params.id } });
-  if (!order) return res.status(404).json({ error: 'Sifariş tapılmadı.' });
+  const loaded = await loadOwnedOrder(req, res);
+  if (!loaded) return;
+  const { order } = loaded;
   // Without this guard, re-calling simulate on an already-'paid' order with outcome:'fail' would
   // flip it to 'failed' — since ownedPackages() only counts status:'paid' rows, this would revoke
   // previously-granted paid access on a real, already-completed purchase. Idempotent: an
-  // already-resolved order just reports its current status instead of re-processing.
+  // already-resolved order just reports its current status instead of re-processing. This is also
+  // what makes a duplicated/replayed webhook-style call safe — a second call for the same order
+  // can never grant a second entitlement window or a second charge.
   if (order.status !== 'pending') {
     return res.json({ status: order.status });
   }
@@ -60,11 +84,33 @@ ordersRouter.post('/:id/simulate', async (req, res) => {
   res.json({ status: 'processing' });
 
   setTimeout(async () => {
-    await prisma.order
-      .update({
-        where: { id: order.id },
-        data: outcome === 'success' ? { status: 'paid', paidAt: new Date() } : { status: 'failed' },
+    if (outcome !== 'success') {
+      await prisma.order.update({ where: { id: order.id }, data: { status: 'failed' } }).catch(() => {});
+      return;
+    }
+    const paidAt = new Date();
+    await prisma.order.update({ where: { id: order.id }, data: { status: 'paid', paidAt } }).catch(() => {});
+
+    // Entitlement window is anchored to the FIRST successful order for this analysis — an upgrade
+    // purchase (package 2 after already owning 1) must not reset the clock, or a user could keep
+    // extending their own access forever by repeatedly "upgrading." updateMany's WHERE guards this
+    // atomically: only fires if paidAt is still null, so a second concurrent/duplicate payment for
+    // the same analysis is a no-op here even if it raced past the order-status guard above.
+    const entitlementExpiresAt = new Date(paidAt.getTime() + ENTITLEMENT_WINDOW_MS);
+    const analysis = await prisma.analysis.findUnique({ where: { id: order.analysisId } });
+    if (!analysis) return;
+    await prisma.analysis
+      .updateMany({
+        where: { id: order.analysisId, paidAt: null },
+        data: {
+          paidAt,
+          entitlementExpiresAt,
+          // Bump the data-retention clock to match, so a just-paid analysis isn't hard-deleted by
+          // the creation-time-based cleanup cron while its entitlement is still active. Never
+          // shortens it — only extends if the entitlement window is later than the current value.
+          ...(entitlementExpiresAt.getTime() > analysis.expiresAt.getTime() ? { expiresAt: entitlementExpiresAt } : {}),
+        },
       })
-      .catch(() => {});
+      .catch((err) => console.error('[orders] entitlement grant failed', err instanceof Error ? err.message : err));
   }, 1400);
 });

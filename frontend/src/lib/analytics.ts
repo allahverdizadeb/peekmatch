@@ -8,11 +8,23 @@ export type AnalyticsEvent =
   | { name: 'package_selected'; metadata: { package: number } }
   | { name: 'checkout_started'; metadata: { package: number; isUpgrade: boolean } }
   | { name: 'payment_completed'; metadata: { package: number } }
-  | { name: 'cv_change_copied'; metadata: { changeType: string; priority: string } };
+  | { name: 'cv_change_copied'; metadata: { changeType: string; priority: string } }
+  // Anonymous-access-restoration events (see ANONYMOUS_ACCESS_RESTORATION_REPORT.md) — presence/
+  // count signals only, no metadata, so nothing beyond "this happened" is ever sent.
+  | { name: 'active_analysis_restored' }
+  | { name: 'resume_analysis_clicked' }
+  | { name: 'new_analysis_warning_shown' }
+  | { name: 'new_analysis_confirmed' }
+  | { name: 'new_analysis_cancelled' }
+  | { name: 'entitlement_restored' }
+  | { name: 'recovery_link_used' }
+  | { name: 'analysis_expired' }
+  | { name: 'duplicate_payment_prevented' };
 
 export function track(event: AnalyticsEvent, analysisId?: string): void {
+  const metadata = 'metadata' in event ? event.metadata : undefined;
   apiRequest('/events', {
     method: 'POST',
-    body: JSON.stringify({ name: event.name, analysisId, metadata: event.metadata }),
+    body: JSON.stringify({ name: event.name, analysisId, metadata }),
   }).catch(() => {});
 }

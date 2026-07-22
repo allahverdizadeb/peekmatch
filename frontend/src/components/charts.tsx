@@ -219,7 +219,10 @@ const STATUS_ORDER: CoverageStatus[] = ['missing', 'partial', 'met', 'insufficie
 
 /** Importance × match-level matrix — one responsive component, not two chart implementations:
  * a true grid (importance rows × status columns) from md: up, the identical data reflowed into
- * grouped stacked lists below md:. */
+ * grouped stacked lists below md:. Every requirement's full title is always visible — no
+ * truncation, no hover-only tooltip, no collapsed "+N" count — cells and rows grow to fit their
+ * content instead of clipping it, since the whole point of this view is reading the actual
+ * requirement text. */
 export function ImportanceMatrix({
   requirements,
   importanceLabels,
@@ -231,7 +234,7 @@ export function ImportanceMatrix({
 }) {
   return (
     <div>
-      <div className="hidden md:grid gap-1 grid-cols-[110px_repeat(4,1fr)]">
+      <div className="hidden md:grid gap-2 grid-cols-[110px_repeat(4,1fr)] items-start">
         <div />
         {STATUS_ORDER.map((s) => (
           <div key={s} className="text-[11px] font-bold text-text2 text-center pb-2 uppercase tracking-wide">
@@ -240,22 +243,26 @@ export function ImportanceMatrix({
         ))}
         {IMPORTANCE_ORDER.map((imp) => (
           <Fragment key={imp}>
-            <div className="text-[12.5px] font-bold text-navy flex items-center pr-2">{importanceLabels[imp]}</div>
+            <div className="text-[12.5px] font-bold text-navy pt-2.5 pr-2">{importanceLabels[imp]}</div>
             {STATUS_ORDER.map((s) => {
               const cell = requirements.filter((r) => r.importance === imp && r.status === s);
               return (
-                <div key={s} className="border border-border rounded-rk p-2 min-h-[60px]">
+                <div
+                  key={s}
+                  className="border border-border rounded-rk p-2.5"
+                  aria-label={`${importanceLabels[imp]}, ${statusLabels[s]}`}
+                >
                   {cell.length === 0 ? (
                     <span className="text-[11px] text-muted">—</span>
                   ) : (
-                    <div className="grid gap-1">
-                      {cell.slice(0, 3).map((r, i) => (
-                        <div key={i} className="text-[11px] text-text2 truncate" title={r.title}>
-                          {r.title}
-                        </div>
+                    <ul className="grid gap-1.5">
+                      {cell.map((r, i) => (
+                        <li key={i} className="flex gap-1.5 items-start text-[12px] text-text2 leading-relaxed">
+                          <span className="text-muted flex-none mt-0.5" aria-hidden="true">•</span>
+                          <span className="break-words">{r.title}</span>
+                        </li>
                       ))}
-                      {cell.length > 3 && <div className="text-[10.5px] text-muted">+{cell.length - 3}</div>}
-                    </div>
+                    </ul>
                   )}
                 </div>
               );
@@ -273,9 +280,11 @@ export function ImportanceMatrix({
               <div className="text-[12.5px] font-bold text-navy mb-2">{importanceLabels[imp]}</div>
               <div className="grid gap-1.5">
                 {items.map((r, i) => (
-                  <div key={i} className="flex items-center gap-2.5 text-[12.5px] text-text2 border border-border rounded-rk px-2.5 py-2">
-                    <StatusDot status={r.status} />
-                    <span className="truncate flex-1">{r.title}</span>
+                  <div key={i} className="flex items-start gap-2.5 text-[12.5px] text-text2 border border-border rounded-rk px-2.5 py-2">
+                    <span className="flex-none mt-0.5">
+                      <StatusDot status={r.status} />
+                    </span>
+                    <span className="leading-relaxed break-words">{r.title}</span>
                   </div>
                 ))}
               </div>

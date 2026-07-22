@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Lock, Download, Copy, Check, FileText, Clock } from 'lucide-react';
+import { Lock, Copy, Check, Clock } from 'lucide-react';
 import { AppHeader } from '../components/AppHeader';
 import { Button, Badge, Card } from '../components/ui';
 import { CategoryBarChart, SegmentedStatBar, type StatSegment } from '../components/charts';
@@ -70,14 +70,14 @@ export default function Workspace() {
   const { t, lang: uiLang } = useLanguage();
   const [info, setInfo] = useState<AnalysisInfo | null>(null);
   const [freeResult, setFreeResult] = useState<FreeResult | null>(null);
-  const [lifecycleCode, setLifecycleCode] = useState<'expired' | 'deleted' | null>(null);
+  const [lifecycleCode, setLifecycleCode] = useState<'expired' | 'deleted' | 'entitlement_expired' | null>(null);
 
   useEffect(() => {
     if (!id) return;
     getAnalysis(id)
       .then(setInfo)
       .catch((err) => {
-        if (err.status === 410 && (err.code === 'expired' || err.code === 'deleted')) setLifecycleCode(err.code);
+        if (err.status === 410 && (err.code === 'expired' || err.code === 'deleted' || err.code === 'entitlement_expired')) setLifecycleCode(err.code);
       });
     // Free result already carries real, already-computed preview counts (cvChangesSummary,
     // interviewRisksCount) — reused here so a locked tab can show what was actually found instead
@@ -102,7 +102,7 @@ export default function Workspace() {
 
   return (
     <div>
-      <AppHeader vacancyTitle={info.vacancyTitle} vacancyCompany={info.vacancyCompany} vacancyLocation={info.vacancyLocation} />
+      <AppHeader vacancyTitle={info.vacancyTitle} vacancyCompany={info.vacancyCompany} vacancyLocation={info.vacancyLocation} analysisId={id} />
       <div className="max-w-[1080px] mx-auto px-6 py-8">
         <LanguageMismatchNotice analysisLanguage={info.outputLanguage} uiLang={uiLang} />
         <div className="flex gap-1.5 mb-7 overflow-x-auto border-b border-border">
@@ -245,10 +245,8 @@ function ReportTab({ id }: { id: string }) {
           <p className="text-[12.5px] text-text2 mb-3">{t.workspace.weightSubtitle}</p>
           <div className="grid gap-2">
             {(['kritik', 'əsas', 'üstünlük'] as const).map((tier) => (
-              <div key={tier} className="flex items-center gap-2.5 px-2.5 py-2 bg-bg rounded-rk">
-                <span className="px-2 py-0.5 rounded-full text-[11px] font-extrabold border border-navy text-navy bg-white">
-                  {t.workspace.importanceLabel[tier]} {t.workspace.weightMultipliers[tier]}
-                </span>
+              <div key={tier} className="px-2.5 py-2 bg-bg rounded-rk text-[12.5px] text-navy">
+                {t.workspace.weightLevelLabel[tier]}
               </div>
             ))}
           </div>
@@ -355,19 +353,6 @@ function ReportTab({ id }: { id: string }) {
           </ol>
         </Card>
       )}
-
-      <Card className="p-6 flex items-center justify-between flex-wrap gap-4">
-        <div className="flex items-center gap-3">
-          <FileText className="w-8 h-8 text-teal" />
-          <div>
-            <div className="font-semibold text-[14.5px]">{t.workspace.reportFileName}</div>
-            <div className="text-[12px] text-text2">{t.workspace.pdfReportLabel}</div>
-          </div>
-        </div>
-        <a href={`/api/analyses/${id}/report/download`} target="_blank" rel="noreferrer">
-          <Button variant="secondary"><Download className="w-4 h-4" />{t.workspace.downloadCta}</Button>
-        </a>
-      </Card>
     </div>
   );
 }

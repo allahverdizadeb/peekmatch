@@ -4,6 +4,7 @@ import { MarketingHeader, Footer } from '../components/MarketingChrome';
 import { Button, Badge, SectionLabel } from '../components/ui';
 import { RadialGauge } from '../components/charts';
 import { Accordion } from '../components/Accordion';
+import { ResumeAnalysisCard } from '../components/ResumeAnalysisCard';
 import { useLanguage } from '../lib/i18n/LanguageContext';
 import type { Dict } from '../lib/i18n/locales';
 
@@ -22,6 +23,7 @@ export default function Landing() {
   return (
     <div>
       <MarketingHeader />
+      <ResumeAnalysisCard />
 
       {/* Hero */}
       <section className="max-w-[1200px] mx-auto px-6 pt-16 pb-10 grid grid-cols-1 lg:grid-cols-[1.05fr_0.95fr] gap-14 items-center">

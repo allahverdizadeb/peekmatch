@@ -15,6 +15,20 @@ model Analysis {
   createdAt DateTime @default(now())
   expiresAt DateTime
 
+  // Anonymous-session ownership (no user registration exists in this product — see
+  // AnonymousSession below). Nullable so pre-migration rows remain readable (treated as
+  // ownerless/public, matching their pre-migration behavior) — every newly-created analysis always
+  // gets one via the session middleware.
+  anonymousSessionId String?
+  anonymousSession    AnonymousSession? @relation(fields: [anonymousSessionId], references: [id], onDelete: SetNull)
+
+  // Paid-entitlement window, anchored to the FIRST successful payment for this analysis — separate
+  // from `expiresAt` (the CV/vacancy *data retention* clock, which starts at creation for a free
+  // analysis). Set once, atomically, the first time any Order for this analysis reaches 'paid';
+  // later package upgrades do not reset it. See lib/pricing.ts's isEntitlementActive().
+  paidAt               DateTime?
+  entitlementExpiresAt DateTime?
+
   // CV input
   cvMode     String? // 'file' | 'text'
   cvFileName String?
@@ -71,7 +85,26 @@ model Analysis {
   recheckResultJson String?
   recheckCount      Int     @default(0)
 
-  orders Order[]
+  orders         Order[]
+  recoveryTokens RecoveryToken[]
+
+  @@index([expiresAt])
+  @@index([anonymousSessionId])
+}
+
+// Identifies "this browser" without registration — see middleware/anonymousSession.ts. The raw
+// token only ever exists in the HttpOnly cookie on the client and in transit; only its SHA-256
+// hash is stored here, so a database read can never yield a usable session token.
+model AnonymousSession {
+  id         String   @id @default(uuid())
+  tokenHash  String   @unique
+  createdAt  DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+  expiresAt  DateTime // sliding window, refreshed on use — deliberately longer-lived than any one
+  // analysis's own 24h entitlement, since the session represents the returning browser, not a
+  // single purchase.
+
+  analyses Analysis[]
 
   @@index([expiresAt])
 }
@@ -86,6 +119,23 @@ model Order {
   package   Int // 1 = Application Package (CV Change Plan + Evidence Chain), 2 = Interview Ready Package (adds Interview Playbook)
   amountUsd Float
   status    String @default("pending") // pending | processing | paid | failed
+
+  @@index([analysisId])
+}
+
+// Single-purpose "return to my paid analysis" link, sent by email after a successful payment (see
+// routes/recovery.ts). Only the hash of the raw token is stored — same rationale as
+// AnonymousSession.tokenHash — so the link itself is the only place the usable secret ever exists.
+// consumedAt is intentionally NOT set on use (see routes/recovery.ts) — the token stays valid
+// (re-openable, e.g. from multiple devices or repeat email opens) until the analysis's own
+// entitlement expires; it is a bounded-lifetime bookmark, not a one-time-use credential.
+model RecoveryToken {
+  id         String   @id @default(uuid())
+  tokenHash  String   @unique
+  analysisId String
+  analysis   Analysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+  expiresAt  DateTime // mirrors Analysis.entitlementExpiresAt at issuance time
 
   @@index([analysisId])
 }

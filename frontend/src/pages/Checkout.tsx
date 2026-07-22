@@ -25,7 +25,7 @@ export default function Checkout() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [owned, setOwned] = useState(0);
-  const [lifecycleCode, setLifecycleCode] = useState<'expired' | 'deleted' | null>(null);
+  const [lifecycleCode, setLifecycleCode] = useState<'expired' | 'deleted' | 'entitlement_expired' | null>(null);
   const [notFound, setNotFound] = useState(false);
 
   useEffect(() => {
@@ -33,7 +33,7 @@ export default function Checkout() {
     getAnalysis(id)
       .then((a) => setOwned(a.ownedPackage))
       .catch((err) => {
-        if (err.status === 410 && (err.code === 'expired' || err.code === 'deleted')) {
+        if (err.status === 410 && (err.code === 'expired' || err.code === 'deleted' || err.code === 'entitlement_expired')) {
           setLifecycleCode(err.code);
         } else if (err.status === 404) {
           setNotFound(true);
@@ -64,7 +64,7 @@ export default function Checkout() {
       const order = await createOrder(id, Number(pkg));
       navigate(`/payment/${order.id}`);
     } catch (err: any) {
-      if (err.status === 410 && (err.code === 'expired' || err.code === 'deleted')) {
+      if (err.status === 410 && (err.code === 'expired' || err.code === 'deleted' || err.code === 'entitlement_expired')) {
         setLifecycleCode(err.code);
       } else if (err.status === 404) {
         setNotFound(true);
@@ -88,7 +88,7 @@ export default function Checkout() {
 
   return (
     <div>
-      <AppHeader />
+      <AppHeader analysisId={id} />
       <div className="max-w-[520px] mx-auto px-6 py-14">
         <Card className="p-7">
           <h1 className="font-display font-semibold text-[22px] mb-6">{t.checkout.title}</h1>
