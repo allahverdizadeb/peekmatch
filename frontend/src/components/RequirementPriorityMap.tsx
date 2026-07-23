@@ -86,6 +86,10 @@ export function RequirementPriorityMap({ requirements, chain }: { requirements: 
         >
           {advancedOpen ? '▾' : '▸'} {m.advancedToggleLabel}
         </button>
+        {/* Margin must live on an inner div, not the grid item itself (`.motion-collapse > *`) —
+         * a box's own margin isn't clipped by its own `overflow: hidden`, so margin placed directly
+         * on the collapsing element still reserves visible space at 0 height. See Accordion.tsx for
+         * the same fix applied to padding. */}
         <div
           id="advanced-match-map"
           className="motion-collapse"
@@ -93,9 +97,11 @@ export function RequirementPriorityMap({ requirements, chain }: { requirements: 
           aria-hidden={!advancedOpen}
           inert={!advancedOpen}
         >
-          <div className="mt-4">
-            <p className="text-[12.5px] text-text2 mb-4">{m.advancedToggleSubtitle}</p>
-            <ImportanceMatrix requirements={requirements} importanceLabels={t.workspace.importanceLabel} statusLabels={t.workspace.statusLabel} />
+          <div>
+            <div className="mt-4">
+              <p className="text-[12.5px] text-text2 mb-4">{m.advancedToggleSubtitle}</p>
+              <ImportanceMatrix requirements={requirements} importanceLabels={t.workspace.importanceLabel} statusLabels={t.workspace.statusLabel} />
+            </div>
           </div>
         </div>
       </div>

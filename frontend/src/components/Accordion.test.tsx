@@ -59,4 +59,47 @@ describe('Accordion', () => {
     fireEvent.click(buttons[0]);
     expect(buttons[0].getAttribute('aria-expanded')).toBe('false');
   });
+
+  it('opening one item only reveals its own answer, not a sibling\'s', () => {
+    render(<Accordion items={ITEMS} />);
+    const buttons = screen.getAllByRole('button');
+    fireEvent.click(buttons[0]);
+
+    expect(screen.getByText('Answer A')).toBeTruthy();
+    const panelB = document.getElementById(buttons[1].getAttribute('aria-controls')!);
+    expect(panelB?.getAttribute('data-state')).toBe('closed');
+  });
+
+  it('the header control is a native <button> — Enter/Space activation and focusability come from HTML semantics, not custom key handling', () => {
+    render(<Accordion items={ITEMS} />);
+    const buttons = screen.getAllByRole('button');
+    expect(buttons[0].tagName).toBe('BUTTON');
+    expect(buttons[0].getAttribute('type')).toBe('button');
+  });
+
+  it(
+    'regression guard: the collapsible panel\'s answer content is never a direct child of the ' +
+      'grid-collapse element — padding/margin on that direct child would render as visible height ' +
+      'even when the row is collapsed to 0fr, since a box\'s own padding/margin is not clipped by ' +
+      'its own overflow:hidden (this was the actual bug: a sliver of answer text stayed visible, ' +
+      'and the fix was moving the padded content one level deeper so it becomes clippable content ' +
+      'instead of the collapsing box\'s own box-model spacing)',
+    () => {
+      render(<Accordion items={ITEMS} />);
+      const buttons = screen.getAllByRole('button');
+      const panel = document.getElementById(buttons[0].getAttribute('aria-controls')!)!;
+      const directChild = panel.firstElementChild!;
+
+      expect(directChild, 'the grid item must exist').toBeTruthy();
+      expect(
+        directChild.className,
+        'the grid item itself (which gets overflow:hidden via .motion-collapse > *) must carry no padding/margin utility classes',
+      ).not.toMatch(/\b(p|px|py|pt|pb|pl|pr|m|mx|my|mt|mb|ml|mr)-\d/);
+
+      // The actual answer text must be nested inside that padding-free wrapper, not sitting
+      // directly on it.
+      expect(directChild.textContent).toContain('Answer A');
+      expect(directChild.children.length, 'answer content must be nested one level deeper, inside a padded child').toBeGreaterThan(0);
+    },
+  );
 });

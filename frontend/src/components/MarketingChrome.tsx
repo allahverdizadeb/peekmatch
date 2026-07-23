@@ -24,7 +24,11 @@ export function MarketingHeader() {
   const { t } = useLanguage();
   return (
     <header className="sticky top-0 z-40 bg-white/92 backdrop-blur border-b border-border">
-      <div className="max-w-[1200px] mx-auto px-6 h-[68px] flex items-center gap-7">
+      {/* px-4 below the xs breakpoint (400px, see index.css's --breakpoint-xs): at the narrowest
+          tested phone widths (360px) the full-padding row (logo + language switcher + CTA) was
+          ~5px wider than the viewport, causing a page-wide horizontal scrollbar. Reclaiming 8px per
+          side is enough to fit without touching typography, colours or the button/switcher design. */}
+      <div className="max-w-[1200px] mx-auto px-4 xs:px-6 h-[68px] flex items-center gap-7">
         <button onClick={() => navigate('/')} className="flex items-center">
           <Logo />
         </button>

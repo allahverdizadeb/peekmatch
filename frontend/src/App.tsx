@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { Routes, Route, useLocation } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import Landing from './pages/Landing';
@@ -12,8 +12,26 @@ import Workspace from './pages/Workspace';
 import Admin from './pages/Admin';
 import AdminInsights from './pages/AdminInsights';
 import { RouteErrorBoundary } from './components/RouteErrorBoundary';
+import { track } from './lib/analytics';
+
+const LANDING_TRACKED_KEY = 'pm_landing_tracked';
+
+/** Fires the Superadmin analytics catalogue's `page_viewed` event on every real customer-facing
+ * route change — deliberately excludes /superadmin and /admin (the founder's own tool usage must
+ * never inflate the Traffic page's own visitor/page-view counts). `landingPage` is true only for
+ * the very first page view of this browser tab. */
+function usePageViewTracking(pathname: string) {
+  useEffect(() => {
+    if (pathname.startsWith('/superadmin') || pathname.startsWith('/admin')) return;
+    const isLanding = !sessionStorage.getItem(LANDING_TRACKED_KEY);
+    if (isLanding) sessionStorage.setItem(LANDING_TRACKED_KEY, '1');
+    track({ name: 'page_viewed', metadata: { landingPage: isLanding } });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname]);
+}
 
 const LegalPage = lazy(() => import('./pages/LegalPage'));
+const SuperadminApp = lazy(() => import('./pages/SuperadminApp'));
 
 // A cold visit to a lazy-loaded route (e.g. a search-engine crawl or a bookmarked /privacy link)
 // must never render a blank screen while the chunk fetches — this is a visible loading state, not
@@ -45,6 +63,7 @@ export default function App() {
   // polling, etc.) on every tab click. React Router already avoids remounting when the same <Route
   // element stays matched across a param change; keying any coarser than that would fight it.
   const routeGroup = location.pathname.split('/')[1] ?? '';
+  usePageViewTracking(location.pathname);
   return (
     // A brief, non-blocking fade+rise on mount (.route-fade, see index.css) — the route has
     // already resolved and rendered by the time this plays, so nothing is delayed or hidden behind
@@ -65,6 +84,16 @@ export default function App() {
         <Route path="/deletion" element={<LegalRoute docKey="deletion" />} />
         <Route path="/admin" element={<Admin />} />
         <Route path="/admin/insights" element={<AdminInsights />} />
+        <Route
+          path="/superadmin/*"
+          element={
+            <RouteErrorBoundary>
+              <Suspense fallback={<LazyRouteFallback />}>
+                <SuperadminApp />
+              </Suspense>
+            </RouteErrorBoundary>
+          }
+        />
       </Routes>
     </div>
   );

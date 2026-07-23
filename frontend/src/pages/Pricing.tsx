@@ -42,6 +42,13 @@ export default function Pricing() {
     if (id) getAnalysis(id).then(setInfo).catch(() => {});
   }, [id]);
 
+  useEffect(() => {
+    track({ name: 'package_section_viewed' }, id);
+    // Fires once per page load, matching "reached paid-package selection" — not re-fired when
+    // `info` finishes loading moments later.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+
   const highlight = Number(params.get('pkg') || 0);
   const notDone = Boolean(info && info.status !== 'done');
 

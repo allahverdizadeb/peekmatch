@@ -107,6 +107,13 @@ export default function AnalysisForm() {
   ];
   const stepperActiveIndex = !cvUploaded ? 0 : !vacancyReady ? 1 : !consent ? 3 : 4;
 
+  function sizeBucket(bytes: number): string {
+    if (bytes < 100 * 1024) return '<100KB';
+    if (bytes < 1024 * 1024) return '100KB-1MB';
+    if (bytes < 5 * 1024 * 1024) return '1-5MB';
+    return '5MB+';
+  }
+
   async function handleFile(file: File) {
     setCvError('');
     if (!/\.(pdf|docx)$/i.test(file.name)) {
@@ -117,6 +124,7 @@ export default function AnalysisForm() {
       setCvError(t.analysisForm.errFileTooLarge);
       return;
     }
+    track({ name: 'cv_upload_started', metadata: { method: 'file' } });
     setCvUploading(true);
     try {
       const res = await createAnalysisFromFile(file);
@@ -124,6 +132,7 @@ export default function AnalysisForm() {
       setCvName(res.cvName);
       setCvSize(res.cvSize);
       setCvUploaded(true);
+      track({ name: 'cv_upload_completed', metadata: { fileType: file.name.split('.').pop() ?? 'unknown', sizeBucket: sizeBucket(file.size) } }, res.id);
     } catch (err: any) {
       setCvError(err.message || t.analysisForm.errFileUploadGeneric);
     } finally {
@@ -133,6 +142,7 @@ export default function AnalysisForm() {
 
   async function submitCvText() {
     setCvError('');
+    track({ name: 'cv_upload_started', metadata: { method: 'text' } });
     setCvUploading(true);
     try {
       const res = await createAnalysisFromText(cvText);
@@ -140,6 +150,7 @@ export default function AnalysisForm() {
       setCvName(res.cvName);
       setCvSize(res.cvSize);
       setCvUploaded(true);
+      track({ name: 'cv_upload_completed', metadata: { fileType: 'text', sizeBucket: sizeBucket(cvText.length) } }, res.id);
     } catch (err: any) {
       setCvError(err.message || t.analysisForm.errCvTextRejected);
     } finally {
@@ -179,6 +190,7 @@ export default function AnalysisForm() {
       if (res.status === 'success' && res.vacancy) {
         setVacancyPreview(res.vacancy);
         setVacancyStatus('success');
+        track({ name: 'vacancy_added', metadata: { method: 'url' } }, analysisId);
       } else {
         setVacancyStatus('failed');
         setVacancyFailReason(res.reason || t.analysisForm.errVacancyGeneric);
@@ -196,6 +208,7 @@ export default function AnalysisForm() {
     try {
       await submitVacancyText(analysisId, manualText);
       setManualSubmitted(true);
+      track({ name: 'vacancy_added', metadata: { method: 'paste' } }, analysisId);
     } catch (err: any) {
       setSubmitError(err.message);
     }

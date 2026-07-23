@@ -31,7 +31,7 @@ npm run dev                 # http://localhost:5173 (proxies /api to :4000)
 |---|---|---|
 | `DATABASE_URL` | yes (defaults to `file:./dev.db`) | SQLite database path |
 | `OPENAI_API_KEY` | **for real AI analysis** | Powers the CV↔vacancy matching, CV Change Plan, and Interview Playbook generation via OpenAI's Responses API. Without it, the backend logs a warning and falls back to a clearly-labeled offline placeholder analyzer so the rest of the product flow is still exercisable. |
-| `OPENAI_MODEL` | no (defaults to `gpt-5.6-terra`) | Model ID used for every AI-backed function. |
+ | `OPENAI_MODEL` | no (defaults to `gpt-5.6-terra`) | Model ID used for every AI-backed function. |
 | `PORT` | no (defaults to 4000) | Backend port |
 | `ADMIN_KEY` | **for the admin panel** | Shared secret gating `GET /api/suggestions` and the `/admin`/`/admin/insights` frontend pages — not a real auth system, just a header/query-param check (`x-admin-key`). Without it set, admin endpoints always 401. |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | no | Feedback-widget submissions (`POST /api/suggestions`) are always saved to the database; if `SMTP_HOST` is set, a copy is also emailed to `support@peeky.az` via `nodemailer`. Without it, the backend logs a warning and skips sending — submissions are never lost. |

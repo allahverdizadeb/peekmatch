@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { Button } from './ui';
+import { Dialog } from './Dialog';
 import { deleteAnalysis } from '../lib/api';
 import { useLanguage } from '../lib/i18n/LanguageContext';
 import { track } from '../lib/analytics';
 import { useModalClose } from '../lib/useModalClose';
-import { useModalA11y } from '../lib/useModalA11y';
 import { DURATION } from '../lib/motion';
 
 /** Warns before an active analysis is replaced — required whenever a user is about to leave a
@@ -29,7 +29,6 @@ export function NewAnalysisConfirmModal({
   const cancelClose = useModalClose(onCancel, DURATION.fast);
   const confirmClose = useModalClose(onConfirmed, DURATION.fast);
   const closing = cancelClose.closing || confirmClose.closing;
-  const dialogRef = useModalA11y(cancelClose.requestClose);
 
   async function confirm() {
     setWorking(true);
@@ -48,35 +47,20 @@ export function NewAnalysisConfirmModal({
   }
 
   return (
-    <div
-      className="motion-backdrop fixed inset-0 z-50 flex items-center justify-center bg-navy/40 backdrop-blur-sm p-6"
-      data-state={closing ? 'closed' : 'open'}
-      onClick={cancel}
-    >
-      <div
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="new-analysis-confirm-title"
-        tabIndex={-1}
-        className="motion-dialog bg-white border border-border rounded-rl shadow-sh-lg p-7 max-w-[440px] w-full text-center focus:outline-none"
-        data-state={closing ? 'closed' : 'open'}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-warning-bg text-warning flex items-center justify-center">
-          <AlertTriangle className="w-6 h-6" />
-        </div>
-        <h2 id="new-analysis-confirm-title" className="text-[19px] font-bold mb-2">{t.newAnalysisConfirm.title}</h2>
-        <p className="text-[14px] text-text2 mb-6 leading-relaxed">{t.newAnalysisConfirm.body}</p>
-        <div className="grid gap-2.5">
-          <Button variant="danger" loading={working} onClick={confirm}>
-            {t.newAnalysisConfirm.confirmCta}
-          </Button>
-          <Button variant="secondary" onClick={cancel} disabled={working}>
-            {t.newAnalysisConfirm.cancelCta}
-          </Button>
-        </div>
+    <Dialog titleId="new-analysis-confirm-title" descriptionId="new-analysis-confirm-body" closing={closing} onRequestClose={cancel}>
+      <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-warning-bg text-warning flex items-center justify-center">
+        <AlertTriangle className="w-6 h-6" />
       </div>
-    </div>
+      <h2 id="new-analysis-confirm-title" className="text-[19px] font-bold mb-2">{t.newAnalysisConfirm.title}</h2>
+      <p id="new-analysis-confirm-body" className="text-[14px] text-text2 mb-6 leading-relaxed">{t.newAnalysisConfirm.body}</p>
+      <div className="grid gap-2.5">
+        <Button variant="danger" loading={working} onClick={confirm}>
+          {t.newAnalysisConfirm.confirmCta}
+        </Button>
+        <Button variant="secondary" onClick={cancel} disabled={working}>
+          {t.newAnalysisConfirm.cancelCta}
+        </Button>
+      </div>
+    </Dialog>
   );
 }

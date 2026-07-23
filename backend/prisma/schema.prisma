@@ -118,9 +118,28 @@ model Order {
 
   package   Int // 1 = Application Package (CV Change Plan + Evidence Chain), 2 = Interview Ready Package (adds Interview Playbook)
   amountUsd Float
-  status    String @default("pending") // pending | processing | paid | failed
+  status    String @default("pending") // pending | processing | paid | failed | refunded
+
+  // Superadmin analytics / payment-ops fields (additive, non-breaking) — a provider-neutral shape
+  // prepared for a future real Payriff integration. `provider` is null for every row created via the
+  // pre-existing demo `/orders/:id/simulate` flow (see routes/orders.ts) — Superadmin financial KPIs
+  // (lib/kpi.ts) deliberately only ever count `provider: 'payriff'` rows, so simulated/demo orders
+  // never surface as real revenue in the dashboard, now or later. Once Payriff is wired up, real
+  // orders get `provider: 'payriff'` and start counting automatically — no separate toggle needed.
+  publicReference        String?   @unique // masked-display reference, e.g. "PM-7F3A9C21" — see lib/masking.ts
+  provider                String? // null = simulated/demo; 'payriff' once a real integration exists
+  providerTransactionRef  String?
+  providerFeeAmount       Float?  // null = unknown/unavailable; NEVER estimated from a public commission %
+  checkoutStartedAt       DateTime?
+  failedAt                DateTime?
+  refundedAt              DateTime?
+  refundAmountUsd         Float   @default(0)
+  failureCode             String? // safe allowlisted category, never a raw provider error string
 
   @@index([analysisId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([provider])
 }
 
 // Single-purpose "return to my paid analysis" link, sent by email after a successful payment (see
@@ -148,7 +167,105 @@ model Event {
   analysisId String?
   metadata   String? // JSON-encoded, small fixed key allowlist per event — see routes/events.ts
 
+  // Superadmin analytics fields (additive) — see SUPERADMIN_ANALYTICS_EVENTS.md / routes/events.ts.
+  // visitorRef/webSessionRef are plain opaque strings, NOT Prisma relations — this keeps analytics
+  // history independent of AnonymousSession's own lifecycle (no cascade/null-out if a future session
+  // cleanup job is added), and neither is ever client-supplied — both are derived server-side from
+  // req.sessionId / the ingestion helper in lib/analyticsIngest.ts.
+  eventId        String?  @unique // idempotency key (client- or server-generated)
+  visitorRef     String? // = AnonymousSession.id
+  webSessionRef  String? // derived 30-min-inactivity grouping id
+  packageCode    String? // 'package_1' | 'package_2' — see lib/pricing.ts's packageCode()
+  language       String? // 'az' | 'en'
+  deviceCategory String? // 'desktop' | 'mobile' | 'tablet' — coarse UA bucket only, never fingerprinting
+  path           String? // pathname only, never a full URL or query string
+  referrerDomain String? // hostname only, never a full referrer URL
+  utmSource      String?
+  utmMedium      String?
+  utmCampaign    String?
+  source         String   @default("client") // 'client' | 'server' — which ingestion path wrote it
+
   @@index([name])
+  @@index([createdAt])
+  @@index([visitorRef])
+  @@index([webSessionRef])
+}
+
+// Single Superadmin operator account (email + password). Deliberately one account, no roles/teams —
+// see CLAUDE.md-equivalent product brief: no 2FA, no invitations, no multi-admin management at launch.
+model SuperadminUser {
+  id                String    @id @default(uuid())
+  email             String    @unique
+  passwordHash      String
+  passwordAlgo      String    @default("bcrypt")
+  isActive          Boolean   @default(true)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  lastLoginAt       DateTime?
+  passwordChangedAt DateTime  @default(now())
+  failedLoginCount  Int       @default(0)
+  lockedUntil       DateTime?
+
+  sessions SuperadminSession[]
+}
+
+// Server-side Superadmin session — the raw token exists only in the HttpOnly `__Host-pm_admin_session`
+// cookie in transit; only its hash is ever stored here (same pattern as AnonymousSession.tokenHash).
+// idleExpiresAt slides on activity (30 min); absoluteExpiresAt is set once at creation and never
+// extended (12h) — see middleware/superadminAuth.ts.
+model SuperadminSession {
+  id                String    @id @default(uuid())
+  superadminUserId  String
+  superadminUser    SuperadminUser @relation(fields: [superadminUserId], references: [id], onDelete: Cascade)
+  tokenHash         String    @unique
+  csrfSecret        String
+  createdAt         DateTime  @default(now())
+  lastActivityAt    DateTime  @default(now())
+  idleExpiresAt     DateTime
+  absoluteExpiresAt DateTime
+  revokedAt         DateTime?
+  userAgentSummary  String? // short derived summary (browser+OS), never the raw full UA string
+  requestIdHash     String? // masked/hashed request identifier — never a raw IP address
+
+  @@index([superadminUserId])
+  @@index([idleExpiresAt])
+}
+
+// Append-only audit trail for every Superadmin action (login, export, settings change, ...). No
+// update/delete code path exists anywhere for this model by design.
+model AdminAuditLog {
+  id            String   @id @default(uuid())
+  createdAt     DateTime @default(now())
+  actorId       String? // null for a failed login attempt (no authenticated actor yet)
+  actorEmail    String? // snapshot at time of action — survives actor record changes
+  action        String // fixed allowlist — see lib/auditLog.ts
+  status        String // 'success' | 'failure'
+  metadata      String? // JSON, allowlisted per action
+  requestIdHash String? // masked/hashed request identifier — never a raw IP address
+
+  @@index([createdAt])
+  @@index([actorId])
+  @@index([action])
+}
+
+// Pre-aggregated hourly/daily metric buckets — idempotent overwrite-by-bucket, populated by the
+// existing 15-min cron (see index.ts). `dimension` uses "" (not null) for the ungrouped total so the
+// @@unique constraint below actually enforces one-row-per-bucket under SQLite (which treats NULL as
+// distinct-from-NULL in unique indexes). The KPI service (lib/kpi.ts) currently prefers live indexed
+// queries over reading this table at this product's current volume — this table exists so the
+// aggregation requirement is real, running infrastructure rather than a stub, and is a
+// straightforward later optimization to switch reads onto once real volume justifies it.
+model MetricRollup {
+  id          String   @id @default(uuid())
+  granularity String // 'hour' | 'day'
+  bucketStart DateTime // UTC-aligned bucket start
+  metricKey   String
+  dimension   String   @default("")
+  value       Float
+  updatedAt   DateTime @updatedAt
+
+  @@unique([granularity, bucketStart, metricKey, dimension])
+  @@index([bucketStart])
 }
 
 // @deprecated-write-path — the public "Təklif ver" submission widget was removed from the product

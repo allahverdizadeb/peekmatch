@@ -30,7 +30,9 @@ export function AppHeader({
   // workspace/session/entitlement state (see ANONYMOUS_ACCESS_RESTORATION_REPORT.md).
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-border">
-      <div className="max-w-[1320px] mx-auto px-6 h-[68px] flex items-center gap-6">
+      {/* px-4 below xs (400px) — see MarketingChrome.tsx's MarketingHeader for the same fix and
+          why: reclaims just enough width to avoid a page-wide horizontal scrollbar at 360px. */}
+      <div className="max-w-[1320px] mx-auto px-4 xs:px-6 h-[68px] flex items-center gap-6">
         <button onClick={() => navigate('/')} className="flex items-center flex-none">
           <Logo size={18} />
         </button>

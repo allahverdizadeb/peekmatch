@@ -62,9 +62,17 @@ export function Accordion({
             </h3>
             {/* grid-template-rows 0fr->1fr smooth-height technique (see .motion-collapse in
              * index.css) — content stays mounted (never unmounts on collapse) so state inside it
-             * survives, and height animates to the content's real size rather than a hardcoded guess. */}
+             * survives, and height animates to the content's real size rather than a hardcoded guess.
+             * Padding must live on the INNER div, not on the grid item itself (`.motion-collapse > *`):
+             * a box's own padding isn't clipped by its own `overflow: hidden` — only a descendant's
+             * rendering is — so padding placed directly on the collapsing element still renders as a
+             * visible band even at 0 height, showing a sliver of answer text peeking out
+             * (`padding-bottom` alone accounts for ~20px of "collapsed" height). Nesting the padding
+             * one level deeper makes it just more content for the grid item to clip. */}
             <div id={panelId} className="motion-collapse" data-state={open ? 'open' : 'closed'} aria-hidden={!open} inert={!open}>
-              <div className="px-5 pb-5 text-[13.5px] text-text2 leading-relaxed">{item.content}</div>
+              <div>
+                <div className="px-5 pb-5 text-[13.5px] text-text2 leading-relaxed">{item.content}</div>
+              </div>
             </div>
           </div>
         );

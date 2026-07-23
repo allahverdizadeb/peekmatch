@@ -15,10 +15,11 @@ import {
   type InterviewPrep,
   type SelfAttestedGap,
 } from '../lib/ai.js';
-import { highestOwnedPackage, ownedPackages, unlocksApplication, unlocksInterview } from '../lib/pricing.js';
+import { highestOwnedPackage, ownedPackages, unlocksApplication, unlocksInterview, packageCode } from '../lib/pricing.js';
 import { resolveAnalysis, respondUnresolved, type AnalysisRow } from '../lib/analysisLifecycle.js';
 import { sanitizeCvChangePlan, computeCvChangesSummary, computeInterviewRisksCount } from '../lib/scoring.js';
 import { buildEvidenceChain } from '../lib/evidenceChain.js';
+import { recordEvent } from '../lib/analyticsIngest.js';
 
 const upload = multer({ limits: { fileSize: MAX_CV_BYTES } });
 const RETENTION_MS = 24 * 60 * 60 * 1000;
@@ -237,6 +238,13 @@ analysesRouter.delete('/:id', async (req, res) => {
       selfAttestedGapDetails: null,
     },
   });
+  recordEvent({
+    name: 'analysis_deleted',
+    analysisId: resolved.analysis.id,
+    visitorRef: resolved.analysis.anonymousSessionId,
+    metadata: { initiator: 'user' },
+    source: 'server',
+  }).catch(() => {});
   res.json({ ok: true });
 });
 
@@ -259,11 +267,32 @@ analysesRouter.post('/:id/start', async (req, res) => {
   await prisma.analysis.update({ where: { id: analysis.id }, data: { status: 'processing', procStage: 1 } });
   res.json({ status: 'processing' });
 
+  // Server-authoritative — never trust a client claim that an analysis started. anonymousSessionId
+  // (not req.sessionId) is used as the visitor reference so it stays correct even though the actual
+  // work below runs detached from this request.
+  recordEvent({
+    name: 'analysis_started',
+    analysisId: analysis.id,
+    visitorRef: analysis.anonymousSessionId,
+    language: analysis.outputLanguage,
+    source: 'server',
+  }).catch(() => {});
+
   // Run in background; frontend polls /status and /result.
   runAnalysis(analysis.id).catch((err) => console.error('[runAnalysis]', err));
 });
 
+/** Coarse, non-precise bucket — "score_bucket only if genuinely needed" per the analytics privacy
+ * rules; never the exact score (that's the job of resultJson/the paid report, not an analytics row). */
+function scoreBucket(score: number): string {
+  if (score >= 80) return '80-100';
+  if (score >= 60) return '60-79';
+  if (score >= 40) return '40-59';
+  return '0-39';
+}
+
 async function runAnalysis(id: string) {
+  const processingStartedAt = Date.now();
   const stages = [1, 2, 3, 4, 5];
   for (const stage of stages) {
     await new Promise((r) => setTimeout(r, 550));
@@ -291,6 +320,15 @@ async function runAnalysis(id: string) {
       },
     });
 
+    recordEvent({
+      name: 'analysis_completed',
+      analysisId: id,
+      visitorRef: analysis.anonymousSessionId,
+      language: analysis.outputLanguage,
+      metadata: { processingMs: Date.now() - processingStartedAt, resultScoreBucket: scoreBucket(result.compatibility) },
+      source: 'server',
+    }).catch(() => {});
+
     // CV Change Plan generation happens AFTER the analysis is already marked 'done', in the same
     // background job but not blocking it — eagerly (for every analysis, not purchase-gated) so the
     // free result can show real change/risk counts, but asynchronously so it doesn't double the
@@ -314,6 +352,15 @@ async function runAnalysis(id: string) {
     // failed (rate limited, model unavailable, etc.) instead of one opaque message for every case.
     const failReason = err instanceof AiError ? err.message : 'Analiz tamamlanmadı.';
     await prisma.analysis.updateMany({ where: { id, deletedAt: null }, data: { status: 'failed', failReason } });
+    // errorCategory is AiError's own typed .code (already a closed enum, never a raw message/stack)
+    // or 'unknown' for a non-AiError bug — never the raw error object/stack trace itself.
+    recordEvent({
+      name: 'analysis_failed',
+      analysisId: id,
+      visitorRef: analysis.anonymousSessionId,
+      metadata: { errorCategory: err instanceof AiError ? err.code : 'unknown' },
+      source: 'server',
+    }).catch(() => {});
   }
 }
 
@@ -445,6 +492,13 @@ analysesRouter.get('/:id/report', async (req, res) => {
   if (!unlocksApplication(owned)) return res.status(402).json({ error: 'Bu paket alınmayıb.', ownedPackage: owned });
   if (!analysis.resultJson) return res.status(409).json({ error: 'Analiz hazır deyil.' });
   const full: MatchResult = JSON.parse(analysis.resultJson);
+  recordEvent({
+    name: 'paid_result_viewed',
+    analysisId: analysis.id,
+    visitorRef: analysis.anonymousSessionId,
+    packageCode: packageCode(owned as 1 | 2),
+    source: 'server',
+  }).catch(() => {});
   res.json({
     vacancy: { title: analysis.vacancyTitle, company: analysis.vacancyCompany, location: analysis.vacancyLocation },
     compatibility: full.compatibility,

@@ -9,6 +9,8 @@ import { sessionRouter } from './routes/session.js';
 import { recoveryRouter } from './routes/recovery.js';
 import { attachSession } from './middleware/anonymousSession.js';
 import { aiConfigured } from './lib/ai.js';
+import { adminAuthRouter } from './routes/admin/auth.js';
+import { adminDataRouter } from './routes/admin/index.js';
 
 /** The Express app itself, separate from index.ts's .listen()/cron wiring, so tests can exercise
  * real HTTP routes (via supertest) without a live server or the cleanup interval running. */
@@ -29,6 +31,8 @@ app.use('/api/analyses', analysesRouter);
 app.use('/api/orders', ordersRouter);
 app.use('/api/suggestions', suggestionsRouter);
 app.use('/api/events', eventsRouter);
+app.use('/api/admin/auth', adminAuthRouter);
+app.use('/api/admin', adminDataRouter);
 
 // Global error handler: without this, an uncaught exception falls through to Express's default
 // handler, which (outside NODE_ENV=production) renders an HTML page containing the full stack

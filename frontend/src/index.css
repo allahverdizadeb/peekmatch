@@ -88,8 +88,23 @@
      metric numerals only, via the `font-display` utility below. */
   --font-sans: "Inter", system-ui, -apple-system, sans-serif;
   --font-display: "Fraunces", Georgia, serif;
+  --font-tab: "Roboto Mono", ui-monospace, monospace;
 
   --breakpoint-xs: 400px;
+
+  /* ---------- Superadmin-only additions ----------
+     Reuses the palette above wherever a role maps cleanly (navy/ink for dark chrome, teal for
+     primary/confirmed, warning-bg for the sample-data banner) — these two are the only genuinely
+     new tokens, since nothing above already covers "sidebar active state" or "dashed comparison
+     series". See SUPERADMIN_DESIGN_HANDOFF.md for the source design tokens this was reconciled
+     against (a close-but-not-identical palette — intentionally not copied verbatim, see CLAUDE.md-
+     equivalent notes on this reconciliation). */
+  --color-sa-active-bg: rgba(15, 157, 145, 0.12);
+  --color-sa-compare: #b7c1cb;
+  --color-sa-grid: #eef2f6;
+  --color-sa-traffic: #3b6fb5;
+  --color-sa-premium: #6b57c9;
+  --color-sa-gold: #b8860b;
 }
 
 @layer base {
@@ -199,6 +214,18 @@
   }
   .motion-popover[data-state="closed"] {
     animation: pm-popover-out var(--motion-instant) var(--ease-exit) both;
+  }
+
+  /* ---------- Dialog viewport safety (see components/Dialog.tsx) ----------
+   * Caps a dialog's own height so pathologically long content (a long translation, a future
+   * modal with more content) scrolls WITHIN the dialog rather than forcing the whole overlay to
+   * scroll past an enormous box. `100dvh` (dynamic viewport height — accounts for mobile browser
+   * chrome showing/hiding) is declared SECOND so it overrides the `100vh` line in browsers that
+   * support it, while browsers that don't simply ignore the invalid second declaration and keep
+   * the first — this is the standard progressive-enhancement idiom for dvh, not a fragile guess. */
+  .dialog-max-height {
+    max-height: calc(100vh - 5rem);
+    max-height: calc(100dvh - 5rem);
   }
 
   /* ---------- Accordion smooth height ----------

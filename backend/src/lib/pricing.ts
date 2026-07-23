@@ -39,3 +39,11 @@ export function unlocksApplication(owned: number): boolean {
 export function unlocksInterview(owned: number): boolean {
   return owned >= 2;
 }
+
+/** Stable analytics identifier for a package — used everywhere an event/order needs a
+ * price-independent code (see Event.packageCode, schema.prisma). Deliberately NOT tied to the
+ * current price (unlike a naive "application_299"-style code) so a future price change never
+ * requires renaming historical analytics rows. */
+export function packageCode(pkg: PackageId): 'package_1' | 'package_2' {
+  return `package_${pkg}`;
+}

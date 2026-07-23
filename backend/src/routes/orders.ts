@@ -1,8 +1,10 @@
 import { Router } from 'express';
 import { prisma } from '../db.js';
-import { PACKAGES, highestOwnedPackage, ownedPackages, upgradePriceUsd, type PackageId } from '../lib/pricing.js';
+import { PACKAGES, highestOwnedPackage, ownedPackages, upgradePriceUsd, packageCode, type PackageId } from '../lib/pricing.js';
 import { resolveAnalysis, respondUnresolved } from '../lib/analysisLifecycle.js';
 import { ENTITLEMENT_WINDOW_MS } from '../lib/entitlement.js';
+import { recordEvent } from '../lib/analyticsIngest.js';
+import { generateUniqueReference } from '../lib/masking.js';
 
 export const ordersRouter = Router();
 
@@ -22,9 +24,24 @@ ordersRouter.post('/', async (req, res) => {
   if (owned >= pkg) return res.status(400).json({ error: 'Bu paket artıq alınıb.' });
 
   const amountUsd = upgradePriceUsd(pkg, owned);
-  const order = await prisma.order.create({
-    data: { analysisId, package: pkg, amountUsd, status: 'pending' },
+  const publicReference = await generateUniqueReference('PM', async (candidate) => {
+    const existing = await prisma.order.findUnique({ where: { publicReference: candidate } });
+    return existing !== null;
   });
+  const order = await prisma.order.create({
+    data: { analysisId, package: pkg, amountUsd, status: 'pending', publicReference, checkoutStartedAt: new Date() },
+  });
+
+  // Server-authoritative: fires only once a real Order row actually exists, not on a page view.
+  recordEvent({
+    name: 'checkout_started',
+    analysisId,
+    visitorRef: req.sessionId ?? null,
+    packageCode: packageCode(pkg),
+    metadata: { isUpgrade: owned > 0 },
+    source: 'server',
+  }).catch(() => {});
+
   res.json({
     id: order.id,
     analysisId: order.analysisId,
@@ -85,11 +102,28 @@ ordersRouter.post('/:id/simulate', async (req, res) => {
 
   setTimeout(async () => {
     if (outcome !== 'success') {
-      await prisma.order.update({ where: { id: order.id }, data: { status: 'failed' } }).catch(() => {});
+      await prisma.order.update({ where: { id: order.id }, data: { status: 'failed', failedAt: new Date() } }).catch(() => {});
+      recordEvent({
+        name: 'payment_failed',
+        analysisId: order.analysisId,
+        packageCode: packageCode(order.package as PackageId),
+        metadata: { failureCategory: 'simulated_failure' },
+        source: 'server',
+      }).catch(() => {});
       return;
     }
     const paidAt = new Date();
     await prisma.order.update({ where: { id: order.id }, data: { status: 'paid', paidAt } }).catch(() => {});
+    // provider stays null here (this is the pre-existing demo simulation, not a real Payriff charge)
+    // — Superadmin financial KPIs deliberately only ever count provider:'payriff' rows, so this event
+    // is recorded for catalogue completeness but never counted as real revenue. See kpi.ts.
+    recordEvent({
+      name: 'payment_succeeded',
+      analysisId: order.analysisId,
+      packageCode: packageCode(order.package as PackageId),
+      metadata: { amount: order.amountUsd, provider: 'simulated' },
+      source: 'server',
+    }).catch(() => {});
 
     // Entitlement window is anchored to the FIRST successful order for this analysis — an upgrade
     // purchase (package 2 after already owning 1) must not reset the clock, or a user could keep
