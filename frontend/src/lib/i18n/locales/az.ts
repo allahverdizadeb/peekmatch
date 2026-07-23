@@ -18,7 +18,7 @@ export const az = {
   },
 
   footer: {
-    tagline: 'CV-nizin konkret vakansiyaya uyğunluğunu sübuta əsaslanan şəkildə göstərən karyera analitika platforması.',
+    tagline: 'CV-nizin seçdiyiniz vakansiyaya nə dərəcədə uyğun olduğunu CV-dəki faktlarla göstərən platforma.',
     productLabel: 'Məhsul',
     howItWorks: 'Necə işləyir',
     pricing: 'Qiymətlər',

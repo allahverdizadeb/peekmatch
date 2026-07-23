@@ -65,17 +65,31 @@ export function VerticalStepper({
             <div className="flex flex-col items-center flex-none">
               <span
                 className={clsx(
-                  'w-8 h-8 rounded-full flex items-center justify-center border transition-colors',
-                  done && 'bg-success border-success text-white',
-                  current && 'bg-info-bg border-info text-info',
-                  !done && !current && 'bg-bg2 border-border text-muted',
+                  'w-8 h-8 rounded-full flex items-center justify-center border transition-[background-color,border-color,color,transform] duration-[var(--motion-standard)] ease-[var(--ease-standard)]',
+                  done && 'bg-success border-success text-white scale-100',
+                  // A restrained, slow pulse — same pm-pulse keyframe already used elsewhere in the
+                  // app for "this is happening now" (GeneratingIllustration, Landing hero icon) —
+                  // reused here rather than inventing a second loop, and reduced-motion-safe via
+                  // index.css's global override on animation-duration.
+                  current && 'bg-info-bg border-info text-info scale-110 [animation:pm-pulse_2.2s_ease-in-out_infinite]',
+                  !done && !current && 'bg-bg2 border-border text-muted scale-100',
                 )}
               >
                 {done ? <Check className="w-4 h-4" aria-hidden="true" /> : Icon ? <Icon className="w-4 h-4" /> : null}
               </span>
-              {i < steps.length - 1 && <span className={clsx('w-px flex-1 min-h-[18px]', done ? 'bg-success' : 'bg-border')} aria-hidden="true" />}
+              {i < steps.length - 1 && (
+                <span
+                  className={clsx(
+                    'w-px flex-1 min-h-[18px] transition-colors duration-[var(--motion-deliberate)] ease-[var(--ease-standard)]',
+                    done ? 'bg-success' : 'bg-border',
+                  )}
+                  aria-hidden="true"
+                />
+              )}
             </div>
-            <span className={clsx('text-[14.5px] pb-4', done || current ? 'text-navy font-medium' : 'text-muted')}>{s.label}</span>
+            <span className={clsx('text-[14.5px] pb-4 transition-colors duration-[var(--motion-standard)]', done || current ? 'text-navy font-medium' : 'text-muted')}>
+              {s.label}
+            </span>
           </li>
         );
       })}

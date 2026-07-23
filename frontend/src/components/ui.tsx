@@ -1,4 +1,5 @@
-import type { ButtonHTMLAttributes, ReactNode } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
+import type { ButtonHTMLAttributes, HTMLAttributes, ReactNode } from 'react';
 import clsx from 'clsx';
 import { CheckCircle2, AlertTriangle, OctagonAlert, Info, Sparkles, Circle } from 'lucide-react';
 
@@ -13,6 +14,10 @@ const VARIANT_CLS: Record<Variant, string> = {
   premium: 'bg-premium text-white hover:bg-[#5f47c4] disabled:bg-border disabled:text-muted',
 };
 
+// Only solid-background variants get the hover elevation (.btn-elevate) — a bordered/text button
+// lifting on hover reads oddly against its flat background.
+const ELEVATE_VARIANTS = new Set<Variant>(['primary', 'danger', 'premium']);
+
 const SIZE_CLS: Record<Size, string> = {
   md: 'px-6 py-3 text-[15px]',
   sm: 'px-4 py-2 text-[13.5px]',
@@ -26,10 +31,32 @@ export function Button({
   loading,
   ...rest
 }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant; size?: Size; loading?: boolean }) {
+  // Preserves the button's width across the loading transition — without this, a button that
+  // shrinks to icon-only (or grows to fit a spinner) while its label re-renders causes a visible
+  // layout jump right when the user is watching most closely (right after they clicked it).
+  const ref = useRef<HTMLButtonElement>(null);
+  const lockedWidth = useRef<number | null>(null);
+  const [minWidth, setMinWidth] = useState<number | undefined>(undefined);
+
+  useLayoutEffect(() => {
+    if (loading) {
+      if (ref.current && lockedWidth.current == null) {
+        lockedWidth.current = ref.current.offsetWidth;
+        setMinWidth(lockedWidth.current);
+      }
+    } else {
+      lockedWidth.current = null;
+      setMinWidth(undefined);
+    }
+  }, [loading]);
+
   return (
     <button
+      ref={ref}
+      style={minWidth ? { minWidth } : undefined}
       className={clsx(
-        'inline-flex items-center justify-center gap-2 rounded-rk font-semibold transition-colors focus-ring disabled:cursor-not-allowed',
+        'inline-flex items-center justify-center gap-2 rounded-rk font-semibold focus-ring disabled:cursor-not-allowed btn-motion',
+        ELEVATE_VARIANTS.has(variant) && 'btn-elevate',
         VARIANT_CLS[variant],
         SIZE_CLS[size],
         className,
@@ -37,7 +64,7 @@ export function Button({
       disabled={rest.disabled || loading}
       {...rest}
     >
-      {loading && <Spinner className="h-4 w-4" />}
+      {loading && <Spinner className="h-4 w-4 flex-none" />}
       {children}
     </button>
   );
@@ -52,8 +79,28 @@ export function Spinner({ className }: { className?: string }) {
   );
 }
 
-export function Card({ className, children }: { className?: string; children: ReactNode }) {
-  return <div className={clsx('bg-surface border border-border rounded-rl min-w-0', className)}>{children}</div>;
+/** `interactive` adds hover/press feedback (.lift + .press-scale) for cards that are themselves
+ * clickable (wrapped in a button/link, or carrying an onClick) — not for purely informational
+ * cards, which only get the always-on border/shadow transition so a conditional state class (e.g.
+ * a package card's "selected" border) animates smoothly instead of jumping. */
+export function Card({
+  className,
+  children,
+  interactive,
+  ...rest
+}: { className?: string; children: ReactNode; interactive?: boolean } & HTMLAttributes<HTMLDivElement>) {
+  return (
+    <div
+      className={clsx(
+        'bg-surface border border-border rounded-rl min-w-0 transition-[border-color,box-shadow] duration-[var(--motion-fast)] ease-[var(--ease-standard)]',
+        interactive && 'lift press-scale cursor-pointer',
+        className,
+      )}
+      {...rest}
+    >
+      {children}
+    </div>
+  );
 }
 
 type BadgeTone = 'success' | 'warning' | 'danger' | 'info' | 'premium' | 'neutral';

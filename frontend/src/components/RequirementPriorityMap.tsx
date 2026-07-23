@@ -6,6 +6,7 @@ import { PriorityChip, type PriorityLevel } from './PriorityChip';
 import { StatusDot, type CoverageStatus } from './StatusDot';
 import { RequirementCoverageBar, ImportanceMatrix } from './charts';
 import { useLanguage } from '../lib/i18n/LanguageContext';
+import { STAGGER, staggerDelay } from '../lib/motion';
 import type { RequirementRow, EvidenceChainLink } from '../lib/api';
 
 /** Replaces the old dense "Əhəmiyyət matrisi" (importance × status grid) as the *default* view on
@@ -53,7 +54,7 @@ export function RequirementPriorityMap({ requirements, chain }: { requirements: 
         {urgent.length > 0 && (
           <RequirementGroup title={m.groupUrgentTitle} note={m.groupUrgentNote} tone="urgent" icon={AlertTriangle}>
             {urgent.map((r, i) => (
-              <RequirementCard key={i} r={r} tone="urgent" relatedChange={relatedChangeFor(r.title)} />
+              <RequirementCard key={i} index={i} r={r} tone="urgent" relatedChange={relatedChangeFor(r.title)} />
             ))}
           </RequirementGroup>
         )}
@@ -61,7 +62,7 @@ export function RequirementPriorityMap({ requirements, chain }: { requirements: 
         {strong.length > 0 && (
           <RequirementGroup title={m.groupStrongTitle} note={m.groupStrongNote} tone="strong" icon={CheckCircle2}>
             {strong.map((r, i) => (
-              <RequirementCard key={i} r={r} tone="strong" relatedChange={null} />
+              <RequirementCard key={i} index={i} r={r} tone="strong" relatedChange={null} />
             ))}
           </RequirementGroup>
         )}
@@ -69,7 +70,7 @@ export function RequirementPriorityMap({ requirements, chain }: { requirements: 
         {preferred.length > 0 && (
           <RequirementGroup title={m.groupPreferredTitle} note={m.groupPreferredNote} tone="preferred" icon={Info}>
             {preferred.map((r, i) => (
-              <RequirementCard key={i} r={r} tone="preferred" relatedChange={r.status !== 'met' ? relatedChangeFor(r.title) : null} />
+              <RequirementCard key={i} index={i} r={r} tone="preferred" relatedChange={r.status !== 'met' ? relatedChangeFor(r.title) : null} />
             ))}
           </RequirementGroup>
         )}
@@ -78,19 +79,25 @@ export function RequirementPriorityMap({ requirements, chain }: { requirements: 
       <div className="mt-7 pt-6 border-t border-border">
         <button
           type="button"
-          className="text-[13px] font-semibold text-teal hover:text-teal-h focus-ring rounded-rk"
+          className="text-[13px] font-semibold text-teal hover:text-teal-h focus-ring rounded-rk transition-colors duration-[var(--motion-fast)]"
           aria-expanded={advancedOpen}
           aria-controls="advanced-match-map"
           onClick={() => setAdvancedOpen((v) => !v)}
         >
           {advancedOpen ? '▾' : '▸'} {m.advancedToggleLabel}
         </button>
-        {advancedOpen && (
-          <div id="advanced-match-map" className="mt-4">
+        <div
+          id="advanced-match-map"
+          className="motion-collapse"
+          data-state={advancedOpen ? 'open' : 'closed'}
+          aria-hidden={!advancedOpen}
+          inert={!advancedOpen}
+        >
+          <div className="mt-4">
             <p className="text-[12.5px] text-text2 mb-4">{m.advancedToggleSubtitle}</p>
             <ImportanceMatrix requirements={requirements} importanceLabels={t.workspace.importanceLabel} statusLabels={t.workspace.statusLabel} />
           </div>
-        )}
+        </div>
       </div>
     </Card>
   );
@@ -140,20 +147,27 @@ function RequirementCard({
   r,
   tone,
   relatedChange,
+  index,
 }: {
   r: RequirementRow;
   tone: 'urgent' | 'strong' | 'preferred';
   relatedChange: string | null;
+  /** Position within its group — drives both the between-card stagger and, added on top of it,
+   * the within-card reveal order (requirement -> status/priority -> evidence -> next step), so the
+   * "relationship" reads as a short sequence rather than everything appearing at once. Fires once
+   * on mount only (a CSS `animation`, not a `transition`) — never replays on later re-renders. */
+  index: number;
 }) {
   const { t } = useLanguage();
   const m = t.workspace.priorityMap;
   const s = GROUP_TONE[tone];
+  const baseDelay = staggerDelay(index, STAGGER.cards);
 
   return (
-    <div className={clsx('border rounded-rl p-4 grid gap-2.5 bg-surface', s.border)}>
+    <div className={clsx('border rounded-rl p-4 grid gap-2.5 bg-surface motion-rise-in', s.border)} style={{ animationDelay: `${baseDelay}ms` }}>
       <div className="flex items-start justify-between gap-2 flex-wrap">
         <span className="font-semibold text-[14px] text-navy">{r.title}</span>
-        <div className="flex items-center gap-1.5 flex-none flex-wrap justify-end">
+        <div className="flex items-center gap-1.5 flex-none flex-wrap justify-end motion-pop-in" style={{ animationDelay: `${baseDelay + 70}ms` }}>
           <PriorityChip level={IMPORTANCE_TO_PRIORITY[r.importance]} label={m.importanceLabel[r.importance]} />
           <Badge
             tone={r.status === 'met' ? 'success' : r.status === 'partial' ? 'warning' : r.status === 'insufficient_info' ? 'neutral' : 'danger'}
@@ -167,14 +181,14 @@ function RequirementCard({
 
       {tone === 'strong' ? (
         r.evidence && (
-          <div>
+          <div className="motion-rise-in" style={{ animationDelay: `${baseDelay + 130}ms` }}>
             <div className="text-[11px] font-semibold text-muted mb-0.5">{t.cvChangePlan.evidenceLabel}</div>
             <p className="text-[13px] text-text2 leading-relaxed">{r.evidence}</p>
           </div>
         )
       ) : (
         r.explanation && (
-          <div>
+          <div className="motion-rise-in" style={{ animationDelay: `${baseDelay + 130}ms` }}>
             <div className="text-[11px] font-semibold text-muted mb-0.5">{m.whyItMattersLabel}</div>
             <p className="text-[13px] text-text2 leading-relaxed">{r.explanation}</p>
           </div>
@@ -182,7 +196,7 @@ function RequirementCard({
       )}
 
       {tone === 'urgent' && (
-        <div className="bg-bg rounded-rk p-2.5">
+        <div className="bg-bg rounded-rk p-2.5 motion-rise-in" style={{ animationDelay: `${baseDelay + 190}ms` }}>
           <div className="text-[11px] font-semibold text-teal mb-0.5">{m.nextActionLabel}</div>
           <p className="text-[13px] text-navy leading-relaxed">
             {relatedChange ? (

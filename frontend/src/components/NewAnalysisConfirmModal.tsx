@@ -4,6 +4,9 @@ import { Button } from './ui';
 import { deleteAnalysis } from '../lib/api';
 import { useLanguage } from '../lib/i18n/LanguageContext';
 import { track } from '../lib/analytics';
+import { useModalClose } from '../lib/useModalClose';
+import { useModalA11y } from '../lib/useModalA11y';
+import { DURATION } from '../lib/motion';
 
 /** Warns before an active analysis is replaced — required whenever a user is about to leave a
  * real, in-progress-or-owned analysis to start a fresh one (via AppHeader's "Yeni analiz"/"New
@@ -21,13 +24,19 @@ export function NewAnalysisConfirmModal({
 }) {
   const { t } = useLanguage();
   const [working, setWorking] = useState(false);
+  // Two independent close paths (cancel vs. confirm) so the right callback fires after the exit
+  // animation regardless of which one the user took — a shared "closing" flag drives the CSS.
+  const cancelClose = useModalClose(onCancel, DURATION.fast);
+  const confirmClose = useModalClose(onConfirmed, DURATION.fast);
+  const closing = cancelClose.closing || confirmClose.closing;
+  const dialogRef = useModalA11y(cancelClose.requestClose);
 
   async function confirm() {
     setWorking(true);
     try {
       await deleteAnalysis(analysisId);
       track({ name: 'new_analysis_confirmed' }, analysisId);
-      onConfirmed();
+      confirmClose.requestClose();
     } catch {
       setWorking(false);
     }
@@ -35,19 +44,29 @@ export function NewAnalysisConfirmModal({
 
   function cancel() {
     track({ name: 'new_analysis_cancelled' }, analysisId);
-    onCancel();
+    cancelClose.requestClose();
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy/40 backdrop-blur-sm p-6" onClick={cancel}>
+    <div
+      className="motion-backdrop fixed inset-0 z-50 flex items-center justify-center bg-navy/40 backdrop-blur-sm p-6"
+      data-state={closing ? 'closed' : 'open'}
+      onClick={cancel}
+    >
       <div
-        className="bg-white border border-border rounded-rl shadow-sh-lg p-7 max-w-[440px] w-full text-center"
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="new-analysis-confirm-title"
+        tabIndex={-1}
+        className="motion-dialog bg-white border border-border rounded-rl shadow-sh-lg p-7 max-w-[440px] w-full text-center focus:outline-none"
+        data-state={closing ? 'closed' : 'open'}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-warning-bg text-warning flex items-center justify-center">
           <AlertTriangle className="w-6 h-6" />
         </div>
-        <h2 className="text-[19px] font-bold mb-2">{t.newAnalysisConfirm.title}</h2>
+        <h2 id="new-analysis-confirm-title" className="text-[19px] font-bold mb-2">{t.newAnalysisConfirm.title}</h2>
         <p className="text-[14px] text-text2 mb-6 leading-relaxed">{t.newAnalysisConfirm.body}</p>
         <div className="grid gap-2.5">
           <Button variant="danger" loading={working} onClick={confirm}>

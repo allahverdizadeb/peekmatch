@@ -9,9 +9,11 @@ import { LifecycleState } from '../components/LifecycleState';
 import { DeleteConfirmDialog } from '../components/DeleteConfirmDialog';
 import { CvChangeCard } from '../components/CvChangeCard';
 import { LanguageMismatchNotice } from '../components/LanguageMismatchNotice';
+import { Reveal } from '../components/Reveal';
 import { getAnalysis, getResult, type FreeResult, type AnalysisInfo } from '../lib/api';
 import { useLanguage } from '../lib/i18n/LanguageContext';
 import { computeApplicationReadiness, type ApplicationReadiness } from '../lib/readiness';
+import { STAGGER, staggerDelay } from '../lib/motion';
 
 const STRENGTH_ICONS = [TrendingUp, Users, Activity];
 // A candidate whose CV presentation lags meaningfully behind their real fit gets the "your
@@ -125,92 +127,102 @@ export default function Results() {
         <p className="text-[12.5px] text-muted mb-8">{t.results.retentionNote}</p>
 
         {/* Application Readiness — a real status computed from compatibility + critical gaps. */}
-        <Card className="p-6 mb-4 border-t-4 border-t-accent">
-          <h2 className="font-display font-semibold text-[19px] mb-4">{t.results.readiness.title}</h2>
-          <ReadinessGauge
-            status={readiness}
-            zoneLabels={[zoneLabels.not_ready, zoneLabels.needs_improvement, zoneLabels.nearly_ready, zoneLabels.ready]}
-            statusLabel={zoneLabels[readiness]}
-            description={t.results.readiness.description[readiness]}
-          />
-        </Card>
+        <Reveal>
+          <Card className="p-6 mb-4 border-t-4 border-t-accent">
+            <h2 className="font-display font-semibold text-[19px] mb-4">{t.results.readiness.title}</h2>
+            <ReadinessGauge
+              status={readiness}
+              zoneLabels={[zoneLabels.not_ready, zoneLabels.needs_improvement, zoneLabels.nearly_ready, zoneLabels.ready]}
+              statusLabel={zoneLabels[readiness]}
+              description={t.results.readiness.description[readiness]}
+            />
+          </Card>
+        </Reveal>
 
         {/* Candidate Fit — its own full-width card so the gauge and the (potentially long,
             multi-language) supporting text each get clearly separated regions instead of being
             squeezed into a quarter-width KPI cell. Chart/score column and text column stack
             vertically on mobile, sit side by side from md: up. */}
-        <Card className="p-6 mb-4">
-          <div className="flex flex-col md:flex-row items-center md:items-start gap-5 md:gap-8">
-            <RadialGauge value={result.compatibility} size={140} />
-            <div className="flex-1 min-w-0 text-center md:text-left">
-              <h2 className="text-[15px] font-semibold text-text2 mb-1">{t.results.kpiCompatTitle}</h2>
-              <p className="font-display font-semibold text-[19px] text-navy mb-3 break-words">{result.compatibilityLabel}</p>
-              <div className="flex items-center justify-center md:justify-start gap-1.5 text-[13px]">
-                <span className="text-text2">{t.results.cvPresentationTitle}:</span>
-                <span className="font-bold text-navy tabular-nums">{result.cvPresentationScore}%</span>
-              </div>
-              {presentationGap && <p className="text-[12.5px] text-text2 mt-2 max-w-[520px]">{t.results.presentationGapMessage}</p>}
-              {result.realCompatibility > result.compatibility && (
-                <div className="mt-3 pt-3 border-t border-border">
-                  <p className="text-[12.5px] text-premium font-medium">{t.results.realMatchTeaser}</p>
-                  <button
-                    className="text-[12px] font-semibold text-teal hover:text-teal-h"
-                    onClick={() => navigate(`/pricing/${id}?pkg=1`)}
-                  >
-                    {t.results.realMatchTeaserCta} →
-                  </button>
+        <Reveal delay={staggerDelay(1, STAGGER.sections)}>
+          <Card className="p-6 mb-4">
+            <div className="flex flex-col md:flex-row items-center md:items-start gap-5 md:gap-8">
+              <RadialGauge value={result.compatibility} size={140} />
+              <div className="flex-1 min-w-0 text-center md:text-left">
+                <h2 className="text-[15px] font-semibold text-text2 mb-1">{t.results.kpiCompatTitle}</h2>
+                <p className="font-display font-semibold text-[19px] text-navy mb-3 break-words">{result.compatibilityLabel}</p>
+                <div className="flex items-center justify-center md:justify-start gap-1.5 text-[13px]">
+                  <span className="text-text2">{t.results.cvPresentationTitle}:</span>
+                  <span className="font-bold text-navy tabular-nums">{result.cvPresentationScore}%</span>
                 </div>
-              )}
+                {presentationGap && <p className="text-[12.5px] text-text2 mt-2 max-w-[520px]">{t.results.presentationGapMessage}</p>}
+                {result.realCompatibility > result.compatibility && (
+                  <div className="mt-3 pt-3 border-t border-border">
+                    <p className="text-[12.5px] text-premium font-medium">{t.results.realMatchTeaser}</p>
+                    <button
+                      className="text-[12px] font-semibold text-teal hover:text-teal-h transition-colors"
+                      onClick={() => navigate(`/pricing/${id}?pkg=1`)}
+                    >
+                      {t.results.realMatchTeaserCta} →
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        </Card>
+          </Card>
+        </Reveal>
 
         {/* Requirement coverage */}
-        <Card className="p-6 mb-4">
-          <h2 className="text-[15px] font-bold mb-1">{t.results.coverageTitle}</h2>
-          <p className="text-[12.5px] text-text2 mb-4">{t.results.coverageSubtitle}</p>
-          <RequirementCoverageBar
-            met={result.mainRequirementsMet}
-            partial={result.mainRequirementsPartial}
-            missing={result.mainRequirementsMissing}
-            labels={{
-              met: t.workspace.statusLabel.met,
-              partial: t.workspace.statusLabel.partial,
-              missing: t.workspace.statusLabel.missing,
-              unknown: t.workspace.statusLabel.insufficient_info,
-            }}
-          />
-        </Card>
+        <Reveal delay={staggerDelay(2, STAGGER.sections)}>
+          <Card className="p-6 mb-4">
+            <h2 className="text-[15px] font-bold mb-1">{t.results.coverageTitle}</h2>
+            <p className="text-[12.5px] text-text2 mb-4">{t.results.coverageSubtitle}</p>
+            <RequirementCoverageBar
+              met={result.mainRequirementsMet}
+              partial={result.mainRequirementsPartial}
+              missing={result.mainRequirementsMissing}
+              labels={{
+                met: t.workspace.statusLabel.met,
+                partial: t.workspace.statusLabel.partial,
+                missing: t.workspace.statusLabel.missing,
+                unknown: t.workspace.statusLabel.insufficient_info,
+              }}
+            />
+          </Card>
+        </Reveal>
 
         {/* KPI grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
-          <Card className="p-5">
-            <MetricCard
-              icon={AlertTriangle}
-              value={result.criticalGapsCount}
-              label={t.results.kpiGapsTitle}
-              tone={result.criticalGapsCount > 0 ? 'danger' : 'success'}
-              size="lg"
-            />
-            <p className="text-[12.5px] text-text2 mt-3">{result.criticalGapSummary}</p>
-          </Card>
+        <Reveal>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+            <Card className="p-5">
+              <MetricCard
+                icon={AlertTriangle}
+                value={result.criticalGapsCount}
+                label={t.results.kpiGapsTitle}
+                tone={result.criticalGapsCount > 0 ? 'danger' : 'success'}
+                size="lg"
+              />
+              <p className="text-[12.5px] text-text2 mt-3">{result.criticalGapSummary}</p>
+            </Card>
 
-          <Card className="p-5 relative">
-            <div className="flex items-center gap-1.5 mb-3">
-              <span className="text-[13px] font-semibold text-text2">{t.results.kpiHrTitle}</span>
-              <Tooltip content={t.results.hrTooltip} />
-            </div>
-            <RadialGauge value={result.hrScreeningEstimate} size={100} stroke={9} />
-            <p className="text-[11.5px] text-muted mt-3">{t.results.hrNote}</p>
-          </Card>
-        </div>
+            <Card className="p-5 relative">
+              <div className="flex items-center gap-1.5 mb-3">
+                <span className="text-[13px] font-semibold text-text2">{t.results.kpiHrTitle}</span>
+                <Tooltip content={t.results.hrTooltip} />
+              </div>
+              <RadialGauge value={result.hrScreeningEstimate} size={100} stroke={9} />
+              <p className="text-[11.5px] text-muted mt-3">{t.results.hrNote}</p>
+            </Card>
+          </div>
+        </Reveal>
 
         {/* Strength profile */}
-        <Card className="p-6 mb-8">
-          <h2 className="text-[17px] font-bold mb-1">{t.results.categoryTitle}</h2>
-          <p className="text-[13px] text-text2 mb-5">{t.results.categorySubtitle}</p>
-          <CategoryBarChart data={result.categoryScores} />
-        </Card>
+        <Reveal>
+          <Card className="p-6 mb-8">
+            <h2 className="text-[17px] font-bold mb-1">{t.results.categoryTitle}</h2>
+            <p className="text-[13px] text-text2 mb-5">{t.results.categorySubtitle}</p>
+            <CategoryBarChart data={result.categoryScores} />
+          </Card>
+        </Reveal>
 
         {/* Strengths */}
         <div className="mb-8">
@@ -220,93 +232,101 @@ export default function Results() {
             {result.strengths.map((s, i) => {
               const Icon = STRENGTH_ICONS[i % STRENGTH_ICONS.length];
               return (
-                <Card key={i} className="p-5">
-                  <Icon className="w-6 h-6 text-teal mb-3" />
-                  <h3 className="text-[15px] font-bold mb-1.5">{s.title}</h3>
-                  <p className="text-[13.5px] text-text2 leading-relaxed mb-3">{s.text}</p>
-                  {s.evidenceFound && <Badge tone="success">{t.results.evidenceFoundBadge}</Badge>}
-                  {s.relatedRequirement && <p className="text-[12px] text-muted mt-2">{t.results.relatedRequirement} {s.relatedRequirement}</p>}
-                </Card>
+                <Reveal key={i} delay={staggerDelay(i, STAGGER.cards)}>
+                  <Card className="p-5">
+                    <Icon className="w-6 h-6 text-teal mb-3" />
+                    <h3 className="text-[15px] font-bold mb-1.5">{s.title}</h3>
+                    <p className="text-[13.5px] text-text2 leading-relaxed mb-3">{s.text}</p>
+                    {s.evidenceFound && <Badge tone="success">{t.results.evidenceFoundBadge}</Badge>}
+                    {s.relatedRequirement && <p className="text-[12px] text-muted mt-2">{t.results.relatedRequirement} {s.relatedRequirement}</p>}
+                  </Card>
+                </Reveal>
               );
             })}
           </div>
         </div>
 
         {/* Most important requirement */}
-        <Card className="p-6 mb-8 border-warning border">
-          <h2 className="text-[17px] font-bold mb-3">{t.results.mostImportantTitle}</h2>
-          <div className="flex items-start gap-3">
-            <AlertTriangle className="w-5 h-5 text-warning flex-none mt-0.5" />
-            <div>
-              <div className="text-[15px] font-semibold">{result.mostImportantMissingRequirement}</div>
-              <Badge tone="warning" className="my-2">{t.results.criticalGapBadge}</Badge>
-              <p className="text-[13.5px] text-text2 leading-relaxed">{result.mostImportantMissingExplanation}</p>
-              <p className="text-[12.5px] text-text2 mt-2 italic">
-                {t.results.mostImportantNote}
-              </p>
+        <Reveal>
+          <Card className="p-6 mb-8 border-warning border">
+            <h2 className="text-[17px] font-bold mb-3">{t.results.mostImportantTitle}</h2>
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-warning flex-none mt-0.5" />
+              <div>
+                <div className="text-[15px] font-semibold">{result.mostImportantMissingRequirement}</div>
+                <Badge tone="warning" className="my-2">{t.results.criticalGapBadge}</Badge>
+                <p className="text-[13.5px] text-text2 leading-relaxed">{result.mostImportantMissingExplanation}</p>
+                <p className="text-[12.5px] text-text2 mt-2 italic">
+                  {t.results.mostImportantNote}
+                </p>
+              </div>
             </div>
-          </div>
-        </Card>
+          </Card>
+        </Reveal>
 
         {/* Recommendation — explains the result and the next step only; the paid conversion CTA
             lives in its own dedicated section below, not competing here. */}
-        <Card className="p-6 mb-8">
-          <Badge tone={recTone as any} className="mb-3">{result.recommendationStatus}</Badge>
-          <ul className="grid gap-1.5 mb-4">
-            {result.recommendationReasons.map((r, i) => (
-              <li key={i} className="text-[13.5px] text-text2 flex gap-2">
-                <span className="text-teal">•</span>
-                {r}
-              </li>
-            ))}
-          </ul>
-          <p className="text-[13.5px] text-navy font-medium">{result.recommendationNextAction}</p>
-        </Card>
+        <Reveal>
+          <Card className="p-6 mb-8">
+            <Badge tone={recTone as any} className="mb-3">{result.recommendationStatus}</Badge>
+            <ul className="grid gap-1.5 mb-4">
+              {result.recommendationReasons.map((r, i) => (
+                <li key={i} className="text-[13.5px] text-text2 flex gap-2">
+                  <span className="text-teal">•</span>
+                  {r}
+                </li>
+              ))}
+            </ul>
+            <p className="text-[13.5px] text-navy font-medium">{result.recommendationNextAction}</p>
+          </Card>
+        </Reveal>
 
         {/* Conversion — one clear CTA into the paid packages, personalized with the real,
             already-computed analysis counts (never hardcoded). Navigates to the pricing page so
             the user compares both packages before choosing — never starts payment directly. */}
-        <Card className="p-6 md:p-10">
-          <div className="text-center max-w-[560px] mx-auto mb-7">
-            <div className="text-[11.5px] font-bold uppercase tracking-[0.08em] text-teal mb-2">{t.results.conversion.label}</div>
-            <h2 className="font-display font-semibold text-[22px] mb-2">{t.results.conversion.heading}</h2>
-            <p className="text-[13.5px] text-text2 mb-4">{t.results.conversion.description}</p>
-            {/* cvChangesSummary is only meaningful once the background CV Change Plan generation
-                has finished (cvChangePlanReady) — showing it earlier would mean displaying a real
-                but not-yet-final 0, which reads as "we found nothing" rather than "still counting". */}
-            {result.cvChangePlanReady && (
-              <p className="text-[14px] font-semibold text-navy">
-                {t.results.conversion.summaryPrefix} {totalCvChanges} {t.results.conversion.summaryMiddle} {result.interviewRisksCount}{' '}
-                {t.results.conversion.summarySuffix}
-              </p>
-            )}
-          </div>
+        <Reveal>
+          <Card className="p-6 md:p-10">
+            <div className="text-center max-w-[560px] mx-auto mb-7">
+              <div className="text-[11.5px] font-bold uppercase tracking-[0.08em] text-teal mb-2">{t.results.conversion.label}</div>
+              <h2 className="font-display font-semibold text-[22px] mb-2">{t.results.conversion.heading}</h2>
+              <p className="text-[13.5px] text-text2 mb-4">{t.results.conversion.description}</p>
+              {/* cvChangesSummary is only meaningful once the background CV Change Plan generation
+                  has finished (cvChangePlanReady) — showing it earlier would mean displaying a real
+                  but not-yet-final 0, which reads as "we found nothing" rather than "still counting". */}
+              {result.cvChangePlanReady && (
+                <p className="text-[14px] font-semibold text-navy motion-pop-in">
+                  {t.results.conversion.summaryPrefix} {totalCvChanges} {t.results.conversion.summaryMiddle} {result.interviewRisksCount}{' '}
+                  {t.results.conversion.summarySuffix}
+                </p>
+              )}
+            </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-7">
-            <ConversionPackageCard pkg={t.results.conversion.packages['1']} price={CONVERSION_PRICE[1]} />
-            <ConversionPackageCard pkg={t.results.conversion.packages['2']} price={CONVERSION_PRICE[2]} />
-          </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-7">
+              <ConversionPackageCard pkg={t.results.conversion.packages['1']} price={CONVERSION_PRICE[1]} />
+              <ConversionPackageCard pkg={t.results.conversion.packages['2']} price={CONVERSION_PRICE[2]} />
+            </div>
 
-          <div className="text-center">
-            <Button onClick={() => navigate(`/pricing/${id}`)} className="w-full sm:w-auto sm:px-10">
-              {t.results.conversion.cta}
-            </Button>
-            <p className="text-[11.5px] text-muted mt-3">{t.results.conversion.oneTimePayment}</p>
-          </div>
-        </Card>
+            <div className="text-center">
+              <Button onClick={() => navigate(`/pricing/${id}`)} className="w-full sm:w-auto sm:px-10">
+                {t.results.conversion.cta}
+              </Button>
+              <p className="text-[11.5px] text-muted mt-3">{t.results.conversion.oneTimePayment}</p>
+            </div>
+          </Card>
+        </Reveal>
 
         {/* One fully-unlocked CV Change Plan example — proves the product works before paying */}
         {result.exampleCard && (
-          <div className="mt-8">
+          <Reveal className="mt-8">
             <h2 className="text-[17px] font-bold mb-1">{t.results.exampleCardTitle}</h2>
             <p className="text-[13px] text-text2 mb-4">{t.results.exampleCardNote}</p>
             <CvChangeCard card={result.exampleCard} analysisId={id} cardIndex={-1} />
-          </div>
+          </Reveal>
         )}
 
         <div className="text-center mt-8">
           <button
-            className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-muted hover:text-danger"
+            className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-muted hover:text-danger transition-colors duration-[var(--motion-fast)]"
             onClick={() => setDeleteOpen(true)}
           >
             <Trash2 className="w-3.5 h-3.5" />

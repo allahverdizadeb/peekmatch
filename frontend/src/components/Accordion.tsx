@@ -53,15 +53,19 @@ export function Accordion({
                 <span className="text-[14.5px] font-semibold text-navy">{item.title}</span>
                 <span className="flex items-center gap-2 flex-none">
                   {item.meta}
-                  <ChevronDown className={clsx('w-4 h-4 text-muted transition-transform', open && 'rotate-180')} aria-hidden="true" />
+                  <ChevronDown
+                    className={clsx('w-4 h-4 text-muted transition-transform duration-[var(--motion-standard)] ease-[var(--ease-standard)]', open && 'rotate-180')}
+                    aria-hidden="true"
+                  />
                 </span>
               </button>
             </h3>
-            {open && (
-              <div id={panelId} className="px-5 pb-5 text-[13.5px] text-text2 leading-relaxed">
-                {item.content}
-              </div>
-            )}
+            {/* grid-template-rows 0fr->1fr smooth-height technique (see .motion-collapse in
+             * index.css) — content stays mounted (never unmounts on collapse) so state inside it
+             * survives, and height animates to the content's real size rather than a hardcoded guess. */}
+            <div id={panelId} className="motion-collapse" data-state={open ? 'open' : 'closed'} aria-hidden={!open} inert={!open}>
+              <div className="px-5 pb-5 text-[13.5px] text-text2 leading-relaxed">{item.content}</div>
+            </div>
           </div>
         );
       })}

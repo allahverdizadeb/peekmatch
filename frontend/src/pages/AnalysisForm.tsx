@@ -253,7 +253,7 @@ export default function AnalysisForm() {
                     key={m}
                     onClick={() => setCvMode(m)}
                     className={
-                      'flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[13px] font-semibold border focus-ring ' +
+                      'flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[13px] font-semibold border focus-ring pill-motion ' +
                       (cvMode === m ? 'border-teal bg-success-bg text-teal' : 'border-border text-text2 bg-white')
                     }
                   >
@@ -265,7 +265,7 @@ export default function AnalysisForm() {
             )}
 
             {cvUploaded ? (
-              <div className="flex items-center gap-3 border border-border rounded-rk p-4 bg-bg">
+              <div className="flex items-center gap-3 border border-border rounded-rk p-4 bg-bg motion-pop-in">
                 <FileText className="w-6 h-6 text-teal flex-none" />
                 <div className="min-w-0 flex-1">
                   <div className="text-[14px] font-semibold truncate">{cvName}</div>
@@ -274,7 +274,7 @@ export default function AnalysisForm() {
                     {cvSize} · {t.analysisForm.uploadedSuccess}
                   </div>
                 </div>
-                <button onClick={resetCv} className="text-[13px] font-semibold text-teal hover:text-teal-h flex-none">
+                <button onClick={resetCv} className="text-[13px] font-semibold text-teal hover:text-teal-h flex-none transition-colors">
                   {t.common.change}
                 </button>
               </div>
@@ -287,18 +287,23 @@ export default function AnalysisForm() {
                 onDragLeave={() => setDragOver(false)}
                 onDrop={onDrop}
                 className={
-                  'border-[1.5px] border-dashed rounded-rc p-8 text-center transition-colors ' +
-                  (dragOver ? 'border-teal bg-success-bg/40' : 'border-border bg-bg')
+                  'border-[1.5px] border-dashed rounded-rc p-8 text-center transition-[border-color,background-color,transform] duration-[var(--motion-fast)] ease-[var(--ease-standard)] ' +
+                  (dragOver ? 'border-teal bg-success-bg/40 scale-[1.01]' : 'border-border bg-bg hover:border-border-strong')
                 }
               >
                 {cvUploading ? (
-                  <div className="flex flex-col items-center gap-2 text-text2">
+                  <div className="flex flex-col items-center gap-2 text-text2 motion-pop-in">
                     <Loader2 className="w-6 h-6 animate-spin text-teal" />
                     <span className="text-[14px]">{t.common.loading}</span>
                   </div>
                 ) : (
                   <>
-                    <span className="w-12 h-12 rounded-full bg-success-bg flex items-center justify-center mx-auto mb-3">
+                    <span
+                      className={
+                        'w-12 h-12 rounded-full bg-success-bg flex items-center justify-center mx-auto mb-3 transition-transform duration-[var(--motion-fast)] ease-[var(--ease-spring)] ' +
+                        (dragOver ? 'scale-110' : '')
+                      }
+                    >
                       <Upload className="w-6 h-6 text-teal" aria-hidden="true" />
                     </span>
                     <p className="text-[15px] font-medium mb-1">{t.analysisForm.dropTitle}</p>
@@ -327,7 +332,7 @@ export default function AnalysisForm() {
                   value={cvText}
                   onChange={(e) => setCvText(e.target.value)}
                   placeholder={t.analysisForm.textPlaceholder}
-                  className="w-full min-h-[160px] border border-border rounded-rk p-3 text-[14px] resize-y focus-ring"
+                  className="w-full min-h-[160px] border border-border rounded-rk p-3 text-[14px] resize-y focus-ring transition-colors duration-[var(--motion-fast)] focus:border-teal"
                 />
                 <div className="flex justify-between items-center flex-wrap gap-2 mt-1.5">
                   <span className={'text-[12px] font-semibold ' + (cvText.length >= MIN_CV_TEXT ? 'text-success' : 'text-muted')}>
@@ -345,14 +350,14 @@ export default function AnalysisForm() {
                 </div>
               </div>
             )}
-            {cvError && <p className="text-[13px] text-danger mt-2">{cvError}</p>}
+            {cvError && <p className="text-[13px] text-danger mt-2 motion-rise-in">{cvError}</p>}
           </div>
 
           {/* Step 2: vacancy */}
           <div className="mb-8">
             <label className="block text-[15px] font-semibold mb-3">{t.analysisForm.step2Label}</label>
             {vacancyStatus === 'success' && vacancyPreview ? (
-              <div className="border border-border rounded-rk p-4 bg-bg">
+              <div className="border border-border rounded-rk p-4 bg-bg motion-pop-in">
                 <div className="flex items-start gap-3">
                   <Check className="w-5 h-5 text-success flex-none mt-0.5" />
                   <div className="min-w-0 flex-1">
@@ -375,7 +380,7 @@ export default function AnalysisForm() {
                 </div>
               </div>
             ) : manualSubmitted ? (
-              <div className="flex items-center gap-2.5 border border-border rounded-rk p-4 bg-bg">
+              <div className="flex items-center gap-2.5 border border-border rounded-rk p-4 bg-bg motion-pop-in">
                 <Check className="w-5 h-5 text-success flex-none" />
                 <span className="text-[14px] font-medium">{t.analysisForm.manualSubmittedText}</span>
                 <button
@@ -396,7 +401,7 @@ export default function AnalysisForm() {
                       key={tab}
                       onClick={() => setVacancyTab(tab)}
                       className={
-                        'flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[13px] font-semibold border focus-ring ' +
+                        'flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[13px] font-semibold border focus-ring pill-motion ' +
                         (vacancyTab === tab ? 'border-teal bg-success-bg text-teal' : 'border-border text-text2 bg-white')
                       }
                     >
@@ -414,7 +419,7 @@ export default function AnalysisForm() {
                         onChange={(e) => setVacancyUrl(e.target.value)}
                         placeholder={t.analysisForm.vacancyUrlPlaceholder}
                         disabled={!analysisId}
-                        className="flex-1 min-w-0 border border-border rounded-rk px-3.5 py-2.5 text-[14px] focus-ring disabled:bg-bg2"
+                        className="flex-1 min-w-0 border border-border rounded-rk px-3.5 py-2.5 text-[14px] focus-ring disabled:bg-bg2 transition-colors duration-[var(--motion-fast)] focus:border-teal"
                       />
                       <Button size="sm" loading={vacancyChecking} disabled={!analysisId || !vacancyUrl} onClick={checkVacancy} className="sm:flex-none">
                         <LinkIcon className="w-4 h-4" />
@@ -427,7 +432,7 @@ export default function AnalysisForm() {
                     {vacancyChecking && <p className="text-[13px] text-teal mt-1">{t.analysisForm.vacancyChecking}</p>}
 
                     {vacancyStatus === 'failed' && (
-                      <div className="mt-4 border border-border rounded-rc p-4 bg-warning-bg">
+                      <div className="mt-4 border border-border rounded-rc p-4 bg-warning-bg motion-pop-in">
                         <div className="flex items-start gap-2.5">
                           <AlertTriangle className="w-5 h-5 text-warning flex-none mt-0.5" />
                           <div className="min-w-0">
@@ -453,7 +458,7 @@ export default function AnalysisForm() {
                       value={manualText}
                       onChange={(e) => setManualText(e.target.value)}
                       placeholder={t.analysisForm.manualPlaceholder}
-                      className="w-full min-h-[140px] border border-border rounded-rk p-3 text-[14px] resize-y focus-ring"
+                      className="w-full min-h-[140px] border border-border rounded-rk p-3 text-[14px] resize-y focus-ring transition-colors duration-[var(--motion-fast)] focus:border-teal"
                     />
                     <div className="flex justify-between items-center flex-wrap gap-2 mt-1.5">
                       <span className={'text-[12px] font-semibold ' + (manualText.length >= MIN_VACANCY_TEXT ? 'text-success' : 'text-muted')}>
@@ -482,7 +487,7 @@ export default function AnalysisForm() {
                   key={code}
                   onClick={() => setOutputLanguageOverride(code)}
                   className={
-                    'px-3.5 py-2 rounded-full text-[13.5px] font-semibold border focus-ring ' +
+                    'px-3.5 py-2 rounded-full text-[13.5px] font-semibold border focus-ring pill-motion ' +
                     (outputLanguage === code ? 'border-teal bg-success-bg text-teal' : 'border-border text-text2 bg-white')
                   }
                 >
@@ -505,7 +510,7 @@ export default function AnalysisForm() {
             </span>
           </label>
 
-          {submitError && <p className="text-[13.5px] text-danger mb-3">{submitError}</p>}
+          {submitError && <p className="text-[13.5px] text-danger mb-3 motion-rise-in">{submitError}</p>}
 
           <Button className="w-full" size="md" disabled={!canSubmit} loading={submitting} onClick={handleSubmit}>
             {t.analysisForm.submitCta}

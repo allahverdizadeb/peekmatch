@@ -1,5 +1,31 @@
 @import "tailwindcss";
 
+/* Motion system tokens — the single source of truth for durations/easings/distances used across
+ * the app. Referenced from CSS (var(--motion-*)) and mirrored as JS constants in lib/motion.ts for
+ * places that need the same numbers in a hook (setTimeout, transitionDelay). Keep these two files
+ * in sync by hand — there are few enough values that a build-time codegen step isn't worth it. */
+:root {
+  /* durations */
+  --motion-instant: 100ms;
+  --motion-fast: 160ms;
+  --motion-standard: 240ms;
+  --motion-deliberate: 400ms;
+  --motion-sequence: 600ms;
+
+  /* easings */
+  --ease-enter: cubic-bezier(0.16, 1, 0.3, 1); /* decelerate — things arriving */
+  --ease-exit: cubic-bezier(0.6, 0, 0.9, 0.1); /* accelerate — things leaving */
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1); /* ordinary interaction (hover, color, etc.) */
+  --ease-emphasis: cubic-bezier(0.2, 0, 0, 1); /* stronger deceleration — draw attention once */
+  --ease-spring: cubic-bezier(0.34, 1.16, 0.64, 1); /* restrained overshoot — press/pop feedback only */
+
+  /* distances — deliberately small; nothing in this app should travel further than --dist-large */
+  --dist-subtle: 4px;
+  --dist-small: 8px;
+  --dist-medium: 16px;
+  --dist-large: 24px;
+}
+
 @theme {
   /* colors — ported 1:1 from the PeekMatch design system */
   --color-navy: #102a43;
@@ -100,21 +126,195 @@
     outline: 3px solid rgba(15, 157, 145, 0.4);
     outline-offset: 2px;
   }
+  /* Clickable-card hover: a clear but restrained lift, not a float. Only apply to elements that
+   * are actually interactive (a card that merely displays data should not move on hover). */
   .lift {
     transition:
-      transform 0.16s ease,
-      box-shadow 0.16s ease;
+      transform var(--motion-fast) var(--ease-standard),
+      box-shadow var(--motion-fast) var(--ease-standard);
   }
   .lift:hover {
-    transform: translateY(-3px);
+    transform: translateY(calc(var(--dist-subtle) * -1));
     box-shadow: var(--shadow-sh-lg);
+  }
+  /* Button/chip press feedback — a small compression, not a bounce. Combine with .lift or use
+   * alone on flat controls (chips, icon buttons). */
+  .press-scale {
+    transition: transform var(--motion-instant) var(--ease-standard);
+  }
+  .press-scale:active {
+    transform: scale(0.97);
+  }
+  /* Button interaction transitions — color/border/shadow only in the base transition; the small
+   * hover elevation is opt-in via .btn-elevate (solid-background variants only — a bordered/text
+   * button lifting on hover reads oddly, so secondary/tertiary/disabled buttons skip it). */
+  .btn-motion {
+    transition:
+      background-color var(--motion-fast) var(--ease-standard),
+      color var(--motion-fast) var(--ease-standard),
+      border-color var(--motion-fast) var(--ease-standard),
+      box-shadow var(--motion-fast) var(--ease-standard),
+      transform var(--motion-fast) var(--ease-standard);
+  }
+  .btn-elevate:hover:not(:disabled) {
+    transform: translateY(calc(var(--dist-subtle) * -1));
+    box-shadow: var(--shadow-sh);
+  }
+  .btn-elevate:active:not(:disabled) {
+    transform: translateY(0) scale(0.97);
   }
   .font-display {
     font-family: var(--font-display);
     font-optical-sizing: auto;
   }
+  /* Pill/chip toggle group — CV mode, vacancy source, language pills. Smooths the border+background
+   * swap when the selected pill changes, instead of it jumping. */
+  .pill-motion {
+    transition:
+      background-color var(--motion-fast) var(--ease-standard),
+      border-color var(--motion-fast) var(--ease-standard),
+      color var(--motion-fast) var(--ease-standard);
+  }
+
+  /* ---------- Overlay primitives (modals, popovers) ----------
+   * Driven by a `data-state="open"|"closed"` attribute (see lib/useDelayedUnmount.ts) rather than
+   * mount/unmount — this is what makes an EXIT animation possible at all with plain CSS: the node
+   * stays rendered for one more frame while data-state flips to "closed" and the exit keyframe
+   * plays, then the hook actually unmounts it. */
+  .motion-backdrop {
+    animation: pm-fade-in var(--motion-standard) var(--ease-enter) both;
+  }
+  .motion-backdrop[data-state="closed"] {
+    animation: pm-fade-out var(--motion-fast) var(--ease-exit) both;
+  }
+  .motion-dialog {
+    animation: pm-dialog-in var(--motion-standard) var(--ease-enter) both;
+  }
+  .motion-dialog[data-state="closed"] {
+    animation: pm-dialog-out var(--motion-fast) var(--ease-exit) both;
+  }
+  .motion-popover {
+    animation: pm-popover-in var(--motion-fast) var(--ease-enter) both;
+    transform-origin: top right;
+  }
+  .motion-popover[data-state="closed"] {
+    animation: pm-popover-out var(--motion-instant) var(--ease-exit) both;
+  }
+
+  /* ---------- Accordion smooth height ----------
+   * grid-template-rows 0fr -> 1fr, not height/max-height: a GPU-friendly technique that animates
+   * to the content's real height (no hardcoded max-height guess, no jump for dynamic content). The
+   * inner element needs `overflow: hidden` and `min-height: 0` (grid item default in some browsers
+   * can otherwise refuse to shrink below content size). */
+  .motion-collapse {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows var(--motion-standard) var(--ease-standard);
+  }
+  .motion-collapse[data-state="open"] {
+    grid-template-rows: 1fr;
+  }
+  .motion-collapse > * {
+    overflow: hidden;
+    min-height: 0;
+  }
+
+  /* ---------- One-shot entrance for content that mounts in response to a user action (a file
+   * accepted, an inline error appearing, a status confirmation) — plays once on mount, never loops,
+   * never replays on re-render since it's an `animation` (fires only when the element is created),
+   * not a `transition` (which would need a state change to trigger). */
+  .motion-pop-in {
+    animation: pm-pop var(--motion-standard) var(--ease-enter) both;
+  }
+  .motion-rise-in {
+    animation: pm-rise var(--motion-standard) var(--ease-enter) both;
+  }
+
+  /* ---------- Route transitions ---------- */
+  .route-fade {
+    animation: pm-route-in var(--motion-standard) var(--ease-enter) both;
+  }
+
+  /* ---------- Scroll reveal (IntersectionObserver-driven, see lib/useInView.ts) ---------- */
+  .motion-reveal {
+    opacity: 0;
+    transform: translateY(var(--dist-medium));
+    transition:
+      opacity var(--motion-deliberate) var(--ease-enter),
+      transform var(--motion-deliberate) var(--ease-enter);
+  }
+  .motion-reveal[data-state="visible"] {
+    opacity: 1;
+    transform: none;
+  }
 }
 
+@keyframes pm-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes pm-fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+@keyframes pm-dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--dist-medium)) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes pm-dialog-out {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(var(--dist-small)) scale(0.98);
+  }
+}
+@keyframes pm-popover-in {
+  from {
+    opacity: 0;
+    transform: translateY(calc(var(--dist-small) * -1)) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes pm-popover-out {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+}
+@keyframes pm-route-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--dist-small));
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
 @keyframes pm-spin {
   to {
     transform: rotate(360deg);

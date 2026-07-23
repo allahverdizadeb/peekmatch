@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react';
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, useLocation } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import Landing from './pages/Landing';
 import AnalysisForm from './pages/AnalysisForm';
@@ -38,21 +38,34 @@ function LegalRoute({ docKey }: { docKey: 'privacy' | 'terms' | 'deletion' }) {
 }
 
 export default function App() {
+  const location = useLocation();
+  // Keyed on the top-level path segment ("workspace", "results", ""for home, ...), NOT the full
+  // pathname — Workspace's tab switching lives at /workspace/:id/:tab, so a naive full-pathname key
+  // would force a full remount (losing all of Workspace's local state, in-flight interview-prep
+  // polling, etc.) on every tab click. React Router already avoids remounting when the same <Route
+  // element stays matched across a param change; keying any coarser than that would fight it.
+  const routeGroup = location.pathname.split('/')[1] ?? '';
   return (
-    <Routes>
-      <Route path="/" element={<Landing />} />
-      <Route path="/analyze" element={<AnalysisForm />} />
-      <Route path="/processing/:id" element={<Processing />} />
-      <Route path="/results/:id" element={<Results />} />
-      <Route path="/pricing/:id" element={<Pricing />} />
-      <Route path="/checkout/:id/:pkg" element={<Checkout />} />
-      <Route path="/payment/:orderId" element={<PaymentStatus />} />
-      <Route path="/workspace/:id/:tab" element={<Workspace />} />
-      <Route path="/privacy" element={<LegalRoute docKey="privacy" />} />
-      <Route path="/terms" element={<LegalRoute docKey="terms" />} />
-      <Route path="/deletion" element={<LegalRoute docKey="deletion" />} />
-      <Route path="/admin" element={<Admin />} />
-      <Route path="/admin/insights" element={<AdminInsights />} />
-    </Routes>
+    // A brief, non-blocking fade+rise on mount (.route-fade, see index.css) — the route has
+    // already resolved and rendered by the time this plays, so nothing is delayed or hidden behind
+    // it; a direct URL load or refresh gets the exact same one-time entrance as an in-app
+    // navigation, not a special case.
+    <div key={routeGroup} className="route-fade">
+      <Routes>
+        <Route path="/" element={<Landing />} />
+        <Route path="/analyze" element={<AnalysisForm />} />
+        <Route path="/processing/:id" element={<Processing />} />
+        <Route path="/results/:id" element={<Results />} />
+        <Route path="/pricing/:id" element={<Pricing />} />
+        <Route path="/checkout/:id/:pkg" element={<Checkout />} />
+        <Route path="/payment/:orderId" element={<PaymentStatus />} />
+        <Route path="/workspace/:id/:tab" element={<Workspace />} />
+        <Route path="/privacy" element={<LegalRoute docKey="privacy" />} />
+        <Route path="/terms" element={<LegalRoute docKey="terms" />} />
+        <Route path="/deletion" element={<LegalRoute docKey="deletion" />} />
+        <Route path="/admin" element={<Admin />} />
+        <Route path="/admin/insights" element={<AdminInsights />} />
+      </Routes>
+    </div>
   );
 }

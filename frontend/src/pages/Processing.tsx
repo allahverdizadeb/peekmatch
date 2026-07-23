@@ -70,7 +70,7 @@ export default function Processing() {
       <MarketingHeader />
       <div className="max-w-[640px] mx-auto px-6 py-16">
         {failed ? (
-          <div className="bg-surface border border-border rounded-rl shadow-sh p-8 text-center">
+          <div className="bg-surface border border-border rounded-rl shadow-sh p-8 text-center motion-pop-in">
             <h1 className="text-[22px] font-bold mb-2">{t.processing.failedTitle}</h1>
             <p className="text-[14.5px] text-text2 mb-6">{t.processing.failedSubtitle}</p>
             <Button onClick={retry}>{t.processing.retry}</Button>
@@ -84,13 +84,13 @@ export default function Processing() {
             <div className="h-1.5 w-full rounded-full bg-bg2 overflow-hidden mb-6" role="img" aria-label={`${Math.round((Math.min(stage, 6) / 6) * 100)}%`}>
               <div
                 className="h-full rounded-full bg-teal"
-                style={{ width: `${(Math.min(stage, 6) / 6) * 100}%`, transition: 'width .4s ease' }}
+                style={{ width: `${(Math.min(stage, 6) / 6) * 100}%`, transition: 'width var(--motion-deliberate) var(--ease-standard)' }}
               />
             </div>
             <VerticalStepper steps={STAGES.map((s) => ({ key: s.label, label: s.label, icon: s.icon }))} activeIndex={stage - 1} allDone={stage >= 6} />
             {stage === LONG_WAIT_STAGE && (
               <div className="mt-1 text-center h-5">
-                <span key={hintIndex} className="inline-block text-[13px] text-info" style={{ animation: 'pm-rise .4s ease both' }}>
+                <span key={hintIndex} className="inline-block text-[13px] text-info motion-rise-in">
                   {hints[hintIndex]}
                 </span>
               </div>
@@ -100,7 +100,7 @@ export default function Processing() {
               {t.processing.privacyNote}
             </div>
             <div className="text-center mt-4">
-              <button className="text-[13px] text-muted hover:text-danger" onClick={() => navigate('/')}>
+              <button className="text-[13px] text-muted hover:text-danger transition-colors duration-[var(--motion-fast)]" onClick={() => navigate('/')}>
                 {t.processing.stopAnalysis}
               </button>
             </div>

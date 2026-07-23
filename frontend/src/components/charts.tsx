@@ -1,8 +1,9 @@
-import { Fragment } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import clsx from 'clsx';
 import { useLanguage } from '../lib/i18n/LanguageContext';
 import { localizeCategoryName } from '../lib/categoryLabel';
 import { StatusDot, type CoverageStatus } from './StatusDot';
+import { useReducedMotion } from '../lib/useReducedMotion';
 import type { ApplicationReadiness } from '../lib/readiness';
 
 function toneColor(pct: number): string {
@@ -29,8 +30,33 @@ export function RadialGauge({
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
   const clamped = Math.max(0, Math.min(100, value));
-  const dash = (clamped / 100) * c;
   const ringColor = color || toneColor(clamped);
+  const reducedMotion = useReducedMotion();
+
+  // Controlled reveal: the ring sweeps in from 0 exactly once, the first time a real value
+  // mounts — never replayed on ordinary re-renders. If `value` changes later (a live update),
+  // the ring transitions smoothly from its current position, not back to 0. The percentage LABEL
+  // always shows the true, final `clamped` value directly (never the mid-sweep ring position), so
+  // the number on screen can never read as a different score than the real one, even mid-animation.
+  const mountedRef = useRef(false);
+  const [ringValue, setRingValue] = useState(reducedMotion ? clamped : 0);
+
+  useEffect(() => {
+    if (!mountedRef.current) {
+      mountedRef.current = true;
+      if (reducedMotion) {
+        setRingValue(clamped);
+        return;
+      }
+      // One extra frame so the browser paints the 0-state first — a transition needs a "from"
+      // value to animate from, which an instant same-frame update wouldn't provide.
+      const raf = requestAnimationFrame(() => setRingValue(clamped));
+      return () => cancelAnimationFrame(raf);
+    }
+    setRingValue(clamped);
+  }, [clamped, reducedMotion]);
+
+  const dash = (ringValue / 100) * c;
   return (
     <div className="relative inline-flex items-center justify-center flex-none drop-shadow-[0_6px_14px_rgba(16,42,67,0.08)]" style={{ width: size, height: size }}>
       <svg width={size} height={size} className="-rotate-90">
@@ -44,7 +70,7 @@ export function RadialGauge({
           strokeWidth={stroke}
           strokeLinecap="round"
           strokeDasharray={`${dash} ${c - dash}`}
-          style={{ transition: 'stroke-dasharray .5s ease' }}
+          style={{ transition: 'stroke-dasharray var(--motion-sequence) var(--ease-standard)' }}
         />
       </svg>
       <div className="absolute inset-0 flex items-center justify-center">

@@ -3,9 +3,11 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Check, Info } from 'lucide-react';
 import { AppHeader } from '../components/AppHeader';
 import { Button, Badge, Card } from '../components/ui';
+import { Reveal } from '../components/Reveal';
 import { getAnalysis, type AnalysisInfo } from '../lib/api';
 import { useLanguage } from '../lib/i18n/LanguageContext';
 import { track } from '../lib/analytics';
+import { STAGGER, staggerDelay } from '../lib/motion';
 import type { Dict } from '../lib/i18n/locales';
 
 function buildPackages(t: Dict) {
@@ -68,58 +70,61 @@ export default function Pricing() {
         )}
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5 items-stretch mb-14">
-          <Card className="p-6 flex flex-col border-dashed border-[1.5px] border-teal">
-            <h3 className="text-[17px] font-bold mb-1">{t.pricing.freeTier.name}</h3>
-            <div className="font-display font-semibold text-[26px] text-success mb-2">{t.pricing.freeTier.priceLabel}</div>
-            <p className="text-[13.5px] text-text2 mb-4">{t.pricing.freeTier.desc}</p>
-            <ul className="grid gap-2 mb-6 flex-1">
-              {t.pricing.freeTier.features.map((f) => (
-                <li key={f} className="text-[13px] text-text2 flex gap-2 items-start">
-                  <Check className="w-3.5 h-3.5 text-teal flex-none mt-0.5" />
-                  {f}
-                </li>
-              ))}
-            </ul>
-            {info?.status === 'done' ? (
-              <Badge tone="success" className="justify-center py-2.5">{t.pricing.ownedBadge}</Badge>
-            ) : (
-              <Button variant="secondary" onClick={() => navigate('/analyze')}>{t.pricing.freeTier.cta}</Button>
-            )}
-          </Card>
-          {PACKAGES.map((p) => {
+          <Reveal delay={staggerDelay(0, STAGGER.cards)} className="h-full">
+            <Card className="p-6 flex flex-col h-full border-dashed border-[1.5px] border-teal">
+              <h3 className="text-[17px] font-bold mb-1">{t.pricing.freeTier.name}</h3>
+              <div className="font-display font-semibold text-[26px] text-success mb-2">{t.pricing.freeTier.priceLabel}</div>
+              <p className="text-[13.5px] text-text2 mb-4">{t.pricing.freeTier.desc}</p>
+              <ul className="grid gap-2 mb-6 flex-1">
+                {t.pricing.freeTier.features.map((f) => (
+                  <li key={f} className="text-[13px] text-text2 flex gap-2 items-start">
+                    <Check className="w-3.5 h-3.5 text-teal flex-none mt-0.5" />
+                    {f}
+                  </li>
+                ))}
+              </ul>
+              {info?.status === 'done' ? (
+                <Badge tone="success" className="justify-center py-2.5">{t.pricing.ownedBadge}</Badge>
+              ) : (
+                <Button variant="secondary" onClick={() => navigate('/analyze')}>{t.pricing.freeTier.cta}</Button>
+              )}
+            </Card>
+          </Reveal>
+          {PACKAGES.map((p, i) => {
             const owned = (info?.ownedPackage || 0) >= p.id;
             return (
-              <Card
-                key={p.id}
-                className={
-                  'p-6 flex flex-col ' +
-                  (p.popular ? 'border-teal border-[1.5px] shadow-sh border-t-4 border-t-accent' : highlight === p.id ? 'border-teal' : '')
-                }
-              >
-                {p.popular && (
-                  <Badge tone="premium" icon={null} className="mb-3 self-start bg-accent-bg text-accent">
-                    {t.pricing.mostPopular}
-                  </Badge>
-                )}
-                <h3 className="text-[17px] font-bold mb-1">{p.name}</h3>
-                <div className="font-display font-semibold text-[26px] text-navy mb-2 tabular-nums">{p.price}</div>
-                <p className="text-[13.5px] text-text2 mb-4">{p.desc}</p>
-                <ul className="grid gap-2 mb-6 flex-1">
-                  {p.features.map((f) => (
-                    <li key={f} className="text-[13px] text-text2 flex gap-2 items-start">
-                      <Check className="w-3.5 h-3.5 text-teal flex-none mt-0.5" />
-                      {f}
-                    </li>
-                  ))}
-                </ul>
-                {owned ? (
-                  <Badge tone="success" className="justify-center py-2.5">{t.pricing.ownedBadge}</Badge>
-                ) : (
-                  <Button variant="primary" disabled={notDone} onClick={() => selectPackage(p.id)}>
-                    {p.cta}
-                  </Button>
-                )}
-              </Card>
+              <Reveal key={p.id} delay={staggerDelay(i + 1, STAGGER.cards)} className="h-full">
+                <Card
+                  className={
+                    'p-6 flex flex-col h-full ' +
+                    (p.popular ? 'border-teal border-[1.5px] shadow-sh border-t-4 border-t-accent' : highlight === p.id ? 'border-teal' : '')
+                  }
+                >
+                  {p.popular && (
+                    <Badge tone="premium" icon={null} className="mb-3 self-start bg-accent-bg text-accent">
+                      {t.pricing.mostPopular}
+                    </Badge>
+                  )}
+                  <h3 className="text-[17px] font-bold mb-1">{p.name}</h3>
+                  <div className="font-display font-semibold text-[26px] text-navy mb-2 tabular-nums">{p.price}</div>
+                  <p className="text-[13.5px] text-text2 mb-4">{p.desc}</p>
+                  <ul className="grid gap-2 mb-6 flex-1">
+                    {p.features.map((f) => (
+                      <li key={f} className="text-[13px] text-text2 flex gap-2 items-start">
+                        <Check className="w-3.5 h-3.5 text-teal flex-none mt-0.5" />
+                        {f}
+                      </li>
+                    ))}
+                  </ul>
+                  {owned ? (
+                    <Badge tone="success" className="justify-center py-2.5">{t.pricing.ownedBadge}</Badge>
+                  ) : (
+                    <Button variant="primary" disabled={notDone} onClick={() => selectPackage(p.id)}>
+                      {p.cta}
+                    </Button>
+                  )}
+                </Card>
+              </Reveal>
             );
           })}
         </div>

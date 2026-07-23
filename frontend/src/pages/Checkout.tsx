@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ShieldCheck, CreditCard } from 'lucide-react';
 import { AppHeader } from '../components/AppHeader';
 import { Button, Card } from '../components/ui';
+import { Reveal } from '../components/Reveal';
 import { LifecycleState } from '../components/LifecycleState';
 import { createOrder, getAnalysis } from '../lib/api';
 import { useLanguage } from '../lib/i18n/LanguageContext';
@@ -90,6 +91,7 @@ export default function Checkout() {
     <div>
       <AppHeader analysisId={id} />
       <div className="max-w-[520px] mx-auto px-6 py-14">
+        <Reveal>
         <Card className="p-7">
           <h1 className="font-display font-semibold text-[22px] mb-6">{t.checkout.title}</h1>
           <div className="border border-border rounded-rc p-4 mb-5">
@@ -132,7 +134,7 @@ export default function Checkout() {
             {t.checkout.noCardStorage}
           </div>
 
-          {error && <p className="text-[13.5px] text-danger mb-3">{error}</p>}
+          {error && <p className="text-[13.5px] text-danger mb-3 motion-rise-in">{error}</p>}
 
           <Button className="w-full mb-3" loading={loading} onClick={proceed}>
             {t.checkout.proceedCta}
@@ -141,6 +143,7 @@ export default function Checkout() {
             {t.checkout.backToPackages}
           </Button>
         </Card>
+        </Reveal>
       </div>
     </div>
   );

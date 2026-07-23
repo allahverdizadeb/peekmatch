@@ -111,7 +111,7 @@ export default function Workspace() {
               key={tb.key}
               onClick={() => navigate(`/workspace/${id}/${tb.key}`)}
               className={
-                'px-4 py-3 text-[14px] font-semibold whitespace-nowrap border-b-2 -mb-px flex items-center gap-1.5 ' +
+                'px-4 py-3 text-[14px] font-semibold whitespace-nowrap border-b-2 -mb-px flex items-center gap-1.5 transition-colors duration-[var(--motion-fast)] ' +
                 (activeTab === tb.key ? 'border-teal text-teal' : 'border-transparent text-text2 hover:text-navy')
               }
             >
@@ -121,44 +121,49 @@ export default function Workspace() {
           ))}
         </div>
 
-        {activeTab === 'report' &&
-          (owned >= 1 ? (
-            <ReportTab id={id} />
-          ) : (
-            <LockPanel
-              pkgName={t.workspace.lockPackageNames.report}
-              price={PRICE_FOR_PKG[1]}
-              analysisId={id}
-              pkgId={1}
-              previewStats={cvPlanPreviewStats(freeResult, t)}
-            />
-          ))}
-        {activeTab === 'cv-plan' &&
-          (owned >= 1 ? (
-            <CvPlanTab id={id} />
-          ) : (
-            <LockPanel
-              pkgName={t.workspace.lockPackageNames.cvPlan}
-              price={PRICE_FOR_PKG[1]}
-              analysisId={id}
-              pkgId={1}
-              previewStats={cvPlanPreviewStats(freeResult, t)}
-            />
-          ))}
-        {activeTab === 'interview' &&
-          (owned >= 2 ? (
-            <InterviewPlaybookTab id={id} />
-          ) : (
-            <LockPanel
-              pkgName={t.workspace.lockPackageNames.interview}
-              price={PRICE_FOR_PKG[2]}
-              analysisId={id}
-              pkgId={2}
-              previewStats={
-                freeResult ? [{ value: freeResult.interviewRisksCount, label: t.results.premiumPreviewInterviewRisksLabel }] : undefined
-              }
-            />
-          ))}
+        {/* Keyed on tab+owned so switching tabs AND a lock->unlock transition (owned changing —
+            e.g. returning here right after payment) both get one brief, non-repeating fade+rise —
+            same treatment as a route change, since this is functionally an in-page one. */}
+        <div key={`${activeTab}-${owned >= 1}-${owned >= 2}`} className="route-fade">
+          {activeTab === 'report' &&
+            (owned >= 1 ? (
+              <ReportTab id={id} />
+            ) : (
+              <LockPanel
+                pkgName={t.workspace.lockPackageNames.report}
+                price={PRICE_FOR_PKG[1]}
+                analysisId={id}
+                pkgId={1}
+                previewStats={cvPlanPreviewStats(freeResult, t)}
+              />
+            ))}
+          {activeTab === 'cv-plan' &&
+            (owned >= 1 ? (
+              <CvPlanTab id={id} />
+            ) : (
+              <LockPanel
+                pkgName={t.workspace.lockPackageNames.cvPlan}
+                price={PRICE_FOR_PKG[1]}
+                analysisId={id}
+                pkgId={1}
+                previewStats={cvPlanPreviewStats(freeResult, t)}
+              />
+            ))}
+          {activeTab === 'interview' &&
+            (owned >= 2 ? (
+              <InterviewPlaybookTab id={id} />
+            ) : (
+              <LockPanel
+                pkgName={t.workspace.lockPackageNames.interview}
+                price={PRICE_FOR_PKG[2]}
+                analysisId={id}
+                pkgId={2}
+                previewStats={
+                  freeResult ? [{ value: freeResult.interviewRisksCount, label: t.results.premiumPreviewInterviewRisksLabel }] : undefined
+                }
+              />
+            ))}
+        </div>
       </div>
     </div>
   );
@@ -593,9 +598,9 @@ function InterviewPlaybookTab({ id }: { id: string }) {
               <p className="text-center text-[14px] font-semibold text-navy mb-1">{L.title}</p>
               <p className="text-center text-[12px] text-text2 mb-4">{L.description}</p>
               <div className="h-2 rounded-full bg-bg2 overflow-hidden mb-3" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
-                <div className="h-full rounded-full bg-teal transition-[width] duration-700 ease-out" style={{ width: `${pct}%` }} />
+                <div className="h-full rounded-full bg-teal transition-[width] duration-[var(--motion-sequence)] ease-[var(--ease-standard)]" style={{ width: `${pct}%` }} />
               </div>
-              <p key={stageIndex} className="text-center text-[13px] text-info" style={{ animation: 'pm-rise .4s ease both' }}>
+              <p key={stageIndex} className="text-center text-[13px] text-info motion-rise-in">
                 {L.stages[stageIndex]}
               </p>
             </>

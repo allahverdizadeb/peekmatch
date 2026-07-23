@@ -5,7 +5,9 @@ import { Button, Badge, SectionLabel } from '../components/ui';
 import { RadialGauge } from '../components/charts';
 import { Accordion } from '../components/Accordion';
 import { ResumeAnalysisCard } from '../components/ResumeAnalysisCard';
+import { Reveal } from '../components/Reveal';
 import { useLanguage } from '../lib/i18n/LanguageContext';
+import { STAGGER, staggerDelay } from '../lib/motion';
 import type { Dict } from '../lib/i18n/locales';
 
 function buildPackages(t: Dict) {
@@ -25,26 +27,35 @@ export default function Landing() {
       <MarketingHeader />
       <ResumeAnalysisCard />
 
-      {/* Hero */}
+      {/* Hero — the one place a hand-tuned, multi-second choreography (not the reusable duration
+          tokens) is appropriate: a one-time "watch it work" narrative on first paint, not a
+          repeated micro-interaction. Text column gets a light, quick rise-in (distinct from the
+          illustration's slower build-up on the right) so the page doesn't feel static before the
+          illustration's own sequence gets going. */}
       <section className="max-w-[1200px] mx-auto px-6 pt-16 pb-10 grid grid-cols-1 lg:grid-cols-[1.05fr_0.95fr] gap-14 items-center">
         <div>
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-success-bg rounded-full text-[13px] font-semibold text-success mb-5">
+          <div
+            className="inline-flex items-center gap-2 px-3 py-1.5 bg-success-bg rounded-full text-[13px] font-semibold text-success mb-5 motion-rise-in"
+          >
             <span className="w-1.5 h-1.5 rounded-full bg-success" />
             {t.landing.badge}
           </div>
-          <h1 className="font-display font-semibold text-[38px] md:text-[48px] leading-[1.1] tracking-tight mb-4">
+          <h1
+            className="font-display font-semibold text-[38px] md:text-[48px] leading-[1.1] tracking-tight mb-4 motion-rise-in"
+            style={{ animationDelay: '60ms' }}
+          >
             {t.landing.heroTitle}
           </h1>
-          <p className="text-[18px] leading-relaxed text-text2 mb-7 max-w-[520px]">
+          <p className="text-[18px] leading-relaxed text-text2 mb-7 max-w-[520px] motion-rise-in" style={{ animationDelay: '120ms' }}>
             {t.landing.heroSubtitle} {t.landing.heroTrustLine}
           </p>
-          <div className="flex gap-3.5 flex-wrap mb-6">
+          <div className="flex gap-3.5 flex-wrap mb-6 motion-rise-in" style={{ animationDelay: '180ms' }}>
             <Button onClick={() => navigate('/analyze')}>{t.landing.ctaPrimary}</Button>
             <Button variant="secondary" onClick={() => document.getElementById('sec-result')?.scrollIntoView({ behavior: 'smooth' })}>
               {t.landing.ctaSecondary}
             </Button>
           </div>
-          <div className="flex gap-5 flex-wrap text-[14px] text-text2 font-medium">
+          <div className="flex gap-5 flex-wrap text-[14px] text-text2 font-medium motion-rise-in" style={{ animationDelay: '230ms' }}>
             <span className="inline-flex items-center gap-2"><Check className="w-[18px] h-[18px] text-teal" />{t.landing.trust1}</span>
             <span className="inline-flex items-center gap-2"><Shield className="w-[18px] h-[18px] text-teal" />{t.landing.trust2}</span>
             <span className="inline-flex items-center gap-2"><Trash2 className="w-[18px] h-[18px] text-teal" />{t.landing.trust3}</span>
@@ -120,7 +131,8 @@ export default function Landing() {
               { n: 3, icon: Sparkles, tag: 'AI', title: t.landing.step3Title, text: t.landing.step3Text },
               { n: 4, icon: BarChart3, tag: t.landing.howVisualTag4, title: t.landing.step4Title, text: t.landing.step4Text },
             ].map((s) => (
-              <div key={s.n} className="bg-bg border border-border rounded-rl p-6 flex flex-col h-full">
+              <Reveal key={s.n} delay={staggerDelay(s.n - 1, STAGGER.cards)} className="h-full">
+              <div className="bg-bg border border-border rounded-rl p-6 flex flex-col h-full">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-3">
                     <span className="w-9 h-9 rounded-[9px] bg-navy text-white inline-flex items-center justify-center font-bold text-[16px]">{s.n}</span>
@@ -218,6 +230,7 @@ export default function Landing() {
                   </div>
                 )}
               </div>
+              </Reveal>
             ))}
           </div>
           <div className="flex justify-center mt-8">
@@ -234,7 +247,10 @@ export default function Landing() {
           </h2>
           <p className="text-[19px] leading-relaxed text-text2">{t.landing.diffSubtitle}</p>
         </div>
+        {/* The two columns reveal in sequence (not simultaneously) — "here's the old way, and
+            here's the difference" reads better as a beat than both halves popping in at once. */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <Reveal>
           <div className="bg-surface border border-border rounded-rl p-7">
             <div className="flex items-center gap-2.5 mb-4 text-muted font-semibold text-[15px]">
               <span className="w-7.5 h-7.5 w-[30px] h-[30px] rounded-lg bg-bg2 inline-flex items-center justify-center"><ScanLine className="w-4 h-4" /></span>
@@ -256,6 +272,8 @@ export default function Landing() {
               </div>
             ))}
           </div>
+          </Reveal>
+          <Reveal delay={140}>
           <div className="bg-gradient-to-b from-white to-[#FAFEFD] border-[1.5px] border-teal rounded-rl p-7 shadow-sh">
             <div className="flex items-center gap-2.5 mb-4 text-teal font-bold text-[15px]">
               <span className="w-[30px] h-[30px] rounded-lg bg-success-bg inline-flex items-center justify-center"><Check className="w-4 h-4" /></span>
@@ -277,6 +295,7 @@ export default function Landing() {
               </div>
             ))}
           </div>
+          </Reveal>
         </div>
       </section>
 
@@ -287,6 +306,12 @@ export default function Landing() {
             <span className="px-3 py-1.5 bg-navy text-white rounded-full text-[12px] font-bold tracking-wide">{t.landing.exampleBadge}</span>
             <h2 className="font-display font-semibold text-[26px] md:text-[30px] tracking-tight">{t.landing.exampleTitle}</h2>
           </div>
+          {/* The score ring's own reveal (RadialGauge sweeps from 0 on first mount, see
+              charts.tsx) already gives this section its "score reveal for example result" beat —
+              no separate treatment needed for the gauge itself. The three summary rows stagger in
+              after it, echoing the real Results page's own reveal order (strength -> gap ->
+              recommendation). */}
+          <Reveal>
           <div className="bg-surface border border-border rounded-rl shadow-sh max-w-[1000px] mx-auto overflow-hidden">
             <div className="flex items-start justify-between gap-4 flex-wrap p-7 border-b border-border">
               <div>
@@ -302,21 +327,21 @@ export default function Landing() {
                 <div className="text-teal font-semibold text-[15px]">{t.landing.gaugeLabel}</div>
               </div>
               <div className="grid gap-3.5">
-                <div className="flex items-start gap-3 bg-success-bg rounded-rc p-4">
+                <div className="flex items-start gap-3 bg-success-bg rounded-rc p-4 motion-rise-in" style={{ animationDelay: '120ms' }}>
                   <Check className="w-5 h-5 text-success flex-none mt-0.5" />
                   <div>
                     <div className="font-bold text-[15px]">{t.landing.exampleStrengthTitle}</div>
                     <div className="text-[13.5px] text-text2 mt-0.5">{t.landing.exampleStrengthSubtitle}</div>
                   </div>
                 </div>
-                <div className="flex items-start gap-3 bg-warning-bg rounded-rc p-4">
+                <div className="flex items-start gap-3 bg-warning-bg rounded-rc p-4 motion-rise-in" style={{ animationDelay: '200ms' }}>
                   <AlertTriangle className="w-5 h-5 text-warning flex-none mt-0.5" />
                   <div>
                     <div className="font-bold text-[15px]">{t.landing.exampleGapTitle}</div>
                     <div className="text-[13.5px] text-text2 mt-0.5">{t.landing.exampleGapSubtitle}</div>
                   </div>
                 </div>
-                <div className="flex items-start gap-3 bg-info-bg rounded-rc p-4">
+                <div className="flex items-start gap-3 bg-info-bg rounded-rc p-4 motion-rise-in" style={{ animationDelay: '280ms' }}>
                   <Target className="w-5 h-5 text-info flex-none mt-0.5" />
                   <div>
                     <div className="font-bold text-[15px]">{t.landing.exampleRecommendationTitle}</div>
@@ -326,6 +351,7 @@ export default function Landing() {
               </div>
             </div>
           </div>
+          </Reveal>
           <div className="text-center mt-7">
             <Button variant="secondary" onClick={() => navigate('/analyze')}>{t.landing.exampleCta}</Button>
           </div>
@@ -340,7 +366,8 @@ export default function Landing() {
           <p className="text-[16px] text-text2">{t.landing.pricingSubtitle}</p>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 items-stretch">
-          <div className="relative rounded-rl p-6 flex flex-col bg-white border-[1.5px] border-dashed border-teal">
+          <Reveal delay={staggerDelay(0, STAGGER.cards)} className="h-full">
+          <div className="relative rounded-rl p-6 flex flex-col h-full bg-white border-[1.5px] border-dashed border-teal">
             <h3 className="text-[17px] font-bold mb-1">{t.pricing.freeTier.name}</h3>
             <p className="text-[13.5px] text-text2 mb-4">{t.pricing.freeTier.desc}</p>
             <div className="text-[32px] font-extrabold text-success mb-4">{t.pricing.freeTier.priceLabel}</div>
@@ -354,12 +381,13 @@ export default function Landing() {
             </ul>
             <Button variant="secondary" onClick={() => navigate('/analyze')}>{t.pricing.freeTier.cta}</Button>
           </div>
+          </Reveal>
 
-          {PACKAGES.map((p) => (
+          {PACKAGES.map((p, i) => (
+            <Reveal key={p.id} delay={staggerDelay(i + 1, STAGGER.cards)} className="h-full">
             <div
-              key={p.id}
               className={
-                'relative rounded-rl p-6 flex flex-col border ' +
+                'relative rounded-rl p-6 flex flex-col h-full border ' +
                 (p.popular ? 'bg-white border-teal border-[1.5px] shadow-sh' : 'bg-white border-border')
               }
             >
@@ -386,6 +414,7 @@ export default function Landing() {
                 {t.landing.selectCta}
               </Button>
             </div>
+            </Reveal>
           ))}
         </div>
         <div className="text-center mt-7">
@@ -398,6 +427,7 @@ export default function Landing() {
       {/* Privacy */}
       <section id="sec-privacy" className="bg-navy text-white">
         <div className="max-w-[1200px] mx-auto px-6 py-16 grid grid-cols-1 md:grid-cols-2 gap-14 items-center">
+          <Reveal>
           <div>
             <div className="inline-flex w-11 h-11 rounded-xl bg-teal/20 text-[#4fd6c9] items-center justify-center mb-5">
               <Shield className="w-6 h-6" />
@@ -407,12 +437,13 @@ export default function Landing() {
               {t.landing.privacySubtitle}
             </p>
             <button
-              className="inline-flex items-center px-5 py-3 rounded-rk border border-white/20 text-white font-semibold text-[14px] hover:bg-white/5"
+              className="inline-flex items-center px-5 py-3 rounded-rk border border-white/20 text-white font-semibold text-[14px] hover:bg-white/5 transition-colors duration-[var(--motion-fast)]"
               onClick={() => navigate('/privacy')}
             >
               {t.landing.privacyCta}
             </button>
           </div>
+          </Reveal>
           <div className="grid gap-3.5">
             {[
               [Lock, t.landing.privacyPoint1],
@@ -420,10 +451,12 @@ export default function Landing() {
               [Trash2, t.landing.privacyPoint3],
               [Clock, t.landing.privacyPoint4],
             ].map(([Icon, text], i) => (
-              <div key={i} className="flex gap-3.5 items-center bg-white/[0.06] border border-white/10 rounded-2xl px-5 py-4">
-                <Icon className="w-[20px] h-[20px] text-[#4fd6c9] flex-none" />
-                <span className="text-[15px] leading-relaxed text-[#e6edf3]">{text as string}</span>
-              </div>
+              <Reveal key={i} delay={staggerDelay(i, STAGGER.compact)}>
+                <div className="flex gap-3.5 items-center bg-white/[0.06] border border-white/10 rounded-2xl px-5 py-4">
+                  <Icon className="w-[20px] h-[20px] text-[#4fd6c9] flex-none" />
+                  <span className="text-[15px] leading-relaxed text-[#e6edf3]">{text as string}</span>
+                </div>
+              </Reveal>
             ))}
           </div>
         </div>
@@ -435,7 +468,9 @@ export default function Landing() {
           <SectionLabel>{t.landing.faqLabel}</SectionLabel>
           <h2 className="font-display font-semibold text-[30px] md:text-[34px] tracking-tight">{t.landing.faqTitle}</h2>
         </div>
-        <Accordion items={t.landing.faq.map((item, i) => ({ key: String(i), title: item.q, content: item.a }))} />
+        <Reveal>
+          <Accordion items={t.landing.faq.map((item, i) => ({ key: String(i), title: item.q, content: item.a }))} />
+        </Reveal>
       </section>
 
       <Footer />

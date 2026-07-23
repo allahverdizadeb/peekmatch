@@ -52,7 +52,11 @@ export default function PaymentStatus() {
     <div>
       <AppHeader />
       <div className="max-w-[480px] mx-auto px-6 py-16">
-        <Card className="p-8 text-center">
+        {/* Keyed on stage so each transition (redirect -> pending -> success/failed) gets one
+            clean, restrained entrance — success getting the same brief pop as everything else
+            here, not a bigger "celebration" effect; failure prioritizes clarity, no extra motion
+            beyond this same one-shot reveal. */}
+        <Card key={stage} className="p-8 text-center motion-pop-in">
           {stage === 'redirect' && (
             <>
               <Loader2 className="w-9 h-9 text-teal mx-auto mb-4 animate-spin" />
