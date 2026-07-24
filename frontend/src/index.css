@@ -258,8 +258,18 @@
   }
 
   /* ---------- Route transitions ---------- */
+  /* Opacity only — deliberately no transform. A transform-touching animation on this wrapper
+   * (which wraps every routed page, including the Superadmin panel's own nested `.route-fade` on
+   * its <main>) makes the browser keep reporting a non-`none` computed `transform` on it for as
+   * long as the animation has ever run, even once finished — and per the CSS containing-block
+   * spec, ANY ancestor with a non-`none` transform becomes the containing block for
+   * `position: fixed` descendants instead of the viewport. That silently broke every fixed-position
+   * overlay under it (confirmed live: a modal's overlay measured 69px tall instead of the real
+   * viewport's 600px) — not just the modal this was first found on, but the Superadmin panel's
+   * Sidebar/Drawer too, and any future one. Losing the small vertical rise is the right trade for
+   * never breaking `position: fixed` app-wide again. */
   .route-fade {
-    animation: pm-route-in var(--motion-standard) var(--ease-enter) both;
+    animation: pm-route-fade-in var(--motion-standard) var(--ease-enter) both;
   }
 
   /* ---------- Scroll reveal (IntersectionObserver-driven, see lib/useInView.ts) ---------- */
@@ -332,14 +342,12 @@
     transform: scale(0.97);
   }
 }
-@keyframes pm-route-in {
+@keyframes pm-route-fade-in {
   from {
     opacity: 0;
-    transform: translateY(var(--dist-small));
   }
   to {
     opacity: 1;
-    transform: none;
   }
 }
 @keyframes pm-spin {
